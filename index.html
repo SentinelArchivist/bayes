@@ -1,0 +1,166 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Bayes — Bayesian Reasoning App</title>
+  <meta name="description" content="A simple, offline-capable app for Bayesian reasoning with multiple hypotheses, repeated updates, and Jeffrey conditionalization.">
+  <link rel="manifest" href="/manifest.webmanifest">
+  <meta name="theme-color" content="#0d1321">
+  <link rel="icon" href="/icons/icon-192.svg" type="image/svg+xml">
+  <link rel="apple-touch-icon" href="/icons/icon-192.svg">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+  <meta name="apple-mobile-web-app-title" content="Bayes">
+  <meta http-equiv="Content-Security-Policy" content="default-src 'self'; img-src 'self' data:; style-src 'self' 'unsafe-inline'; script-src 'self'; font-src 'self' data:; connect-src 'self';">
+  <link rel="stylesheet" href="/styles.css">
+</head>
+<body>
+  <header class="app-header">
+    <h1>Bayes</h1>
+    <nav class="tabs" role="tablist" aria-label="Primary">
+      <button class="tab active" data-tab="setup" role="tab" aria-selected="true">Setup</button>
+      <button class="tab" data-tab="evidence" role="tab" aria-selected="false">Evidence</button>
+      <button class="tab" data-tab="results" role="tab" aria-selected="false">Results</button>
+      <button class="tab" data-tab="history" role="tab" aria-selected="false">History</button>
+      <button class="tab" data-tab="settings" role="tab" aria-selected="false">Settings</button>
+    </nav>
+    <div class="project-controls">
+      <button id="btn-projects" class="secondary">Projects</button>
+      <button id="btn-export" class="secondary">Export JSON</button>
+      <label class="import-label">Import JSON<input type="file" id="input-import" accept="application/json" /></label>
+    </div>
+  </header>
+
+  <main>
+    <section id="view-setup" class="view active" aria-labelledby="tab-setup">
+      <h2>Hypotheses & Priors</h2>
+      <p class="help">Add your hypotheses and your initial chances (priors). You can type decimals (0.4), percentages (40%), fractions (1/3), or scientific notation (1e-6).</p>
+      <div class="hypotheses">
+        <table class="table">
+          <thead>
+            <tr><th>Label</th><th>Prior</th><th></th></tr>
+          </thead>
+          <tbody id="hypo-rows"></tbody>
+        </table>
+        <div class="row-actions">
+          <button id="btn-add-hypo">Add Hypothesis</button>
+          <button id="btn-normalize" class="secondary">Normalize Priors</button>
+        </div>
+        <div id="priors-summary" class="muted"></div>
+      </div>
+    </section>
+
+    <section id="view-evidence" class="view" aria-labelledby="tab-evidence">
+      <h2>Add Evidence</h2>
+      <div class="evidence-switcher">
+        <button class="chip chip-active" data-etype="certain">Certain</button>
+        <button class="chip" data-etype="jeffrey">Uncertain (Jeffrey)</button>
+      </div>
+      <div id="evidence-certain" class="evidence-panel">
+        <p class="help">Enter the likelihood of this evidence if each hypothesis were true (P(E|H)).</p>
+        <table class="table">
+          <thead><tr><th>Hypothesis</th><th>P(E|H)</th></tr></thead>
+          <tbody id="likelihood-rows"></tbody>
+        </table>
+        <div class="row-actions">
+          <button id="btn-add-evidence-certain">Apply Evidence</button>
+        </div>
+      </div>
+      <div id="evidence-jeffrey" class="evidence-panel hidden">
+        <p class="help">Define categories (a partition) and your target weights after seeing ambiguous evidence. Then set P(Category|H) for each hypothesis.</p>
+        <div class="jeffrey-categories">
+          <table class="table small">
+            <thead><tr><th>Category</th><th>Target Weight</th><th></th></tr></thead>
+            <tbody id="jeffrey-cats"></tbody>
+          </table>
+          <div class="row-actions">
+            <button id="btn-add-cat">Add Category</button>
+            <button id="btn-normalize-cats" class="secondary">Normalize Weights</button>
+          </div>
+        </div>
+        <div class="jeffrey-likelihoods">
+          <table class="table">
+            <thead id="jeffrey-like-head"></thead>
+            <tbody id="jeffrey-like-body"></tbody>
+          </table>
+        </div>
+        <div class="row-actions">
+          <button id="btn-add-evidence-jeffrey">Apply Jeffrey Evidence</button>
+        </div>
+      </div>
+      <div id="evidence-message" class="message" role="status"></div>
+    </section>
+
+    <section id="view-results" class="view" aria-labelledby="tab-results">
+      <h2>Results</h2>
+      <div class="charts">
+        <div class="chart-card">
+          <h3>Current Posterior</h3>
+          <div id="chart-bar" class="chart"></div>
+        </div>
+        <div class="chart-card">
+          <h3>Beliefs Over Time</h3>
+          <div id="chart-line" class="chart"></div>
+        </div>
+      </div>
+      <div class="results-table">
+        <table class="table">
+          <thead><tr><th>Hypothesis</th><th>Posterior</th></tr></thead>
+          <tbody id="results-rows"></tbody>
+        </table>
+      </div>
+    </section>
+
+    <section id="view-history" class="view" aria-labelledby="tab-history">
+      <h2>History</h2>
+      <div id="history-list" class="history-list"></div>
+      <div class="row-actions">
+        <button id="btn-undo" class="secondary">Undo</button>
+        <button id="btn-redo" class="secondary">Redo</button>
+        <button id="btn-clear-history" class="danger">Clear Last Evidence</button>
+      </div>
+    </section>
+
+    <section id="view-settings" class="view" aria-labelledby="tab-settings">
+      <h2>Settings</h2>
+      <div class="settings">
+        <label>
+          Number format
+          <select id="setting-number-format">
+            <option value="percent">Percent</option>
+            <option value="decimal">Decimal</option>
+          </select>
+        </label>
+        <label>
+          Rounding (digits)
+          <input id="setting-round" type="number" min="0" max="8" value="2" />
+        </label>
+        <label>
+          Theme
+          <select id="setting-theme">
+            <option value="light">Light</option>
+            <option value="dark">Dark</option>
+          </select>
+        </label>
+      </div>
+    </section>
+  </main>
+
+  <dialog id="projects-dialog">
+    <form method="dialog">
+      <h3>Projects</h3>
+      <div id="projects-list" class="projects-list"></div>
+      <div class="row-actions">
+        <input type="text" id="new-project-name" placeholder="New project name" />
+        <button id="btn-create-project">Create</button>
+        <button value="cancel" class="secondary">Close</button>
+      </div>
+    </form>
+  </dialog>
+
+  <div id="toaster" role="status" aria-live="polite"></div>
+
+  <script type="module" src="/js/main.js"></script>
+</body>
+</html>
