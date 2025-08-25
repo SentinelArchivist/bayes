@@ -818,6 +818,7 @@ export const App = (() => {
 
   // ---------- Tutorial System ----------
   let tutorialStep = 0;
+  let tutorialActive = false;
   const tutorialSteps = [
     {
       title: 'Welcome to Bayes!',
@@ -845,13 +846,39 @@ export const App = (() => {
     }
   ];
 
+  function showOverlay() {
+    const overlay = document.getElementById('tutorial-overlay');
+    overlay.removeAttribute('aria-hidden');
+    overlay.removeAttribute('hidden');
+    overlay.classList.remove('hidden');
+    overlay.style.display = 'flex';
+    overlay.style.visibility = 'visible';
+    overlay.style.pointerEvents = 'auto';
+    return overlay;
+  }
+
+  function hideOverlay() {
+    const overlay = document.getElementById('tutorial-overlay');
+    overlay.setAttribute('aria-hidden', 'true');
+    overlay.setAttribute('hidden', '');
+    overlay.classList.add('hidden');
+    overlay.style.display = 'none';
+    overlay.style.visibility = 'hidden';
+    overlay.style.pointerEvents = 'none';
+    return overlay;
+  }
+
   function startTutorial() {
     tutorialStep = 0;
+    tutorialActive = true;
+    document.body.dataset.tutorialActive = 'true';
+    const overlay = showOverlay();
     document.getElementById('help-dialog').close();
     showTutorialStep();
   }
 
   function showTutorialStep() {
+    if (!tutorialActive) return;
     const overlay = document.getElementById('tutorial-overlay');
     const title = document.getElementById('tutorial-title');
     const text = document.getElementById('tutorial-text');
@@ -866,9 +893,14 @@ export const App = (() => {
     nextBtn.textContent = tutorialStep === tutorialSteps.length - 1 ? 'Finish' : 'Next';
     
     overlay.classList.remove('hidden');
+    overlay.style.display = 'flex';
+    overlay.style.visibility = 'visible';
+    overlay.style.pointerEvents = 'auto';
   }
 
-  function nextTutorialStep() {
+  function nextTutorialStep(e) {
+    if (e) { e.preventDefault(); e.stopPropagation(); }
+    if (!tutorialActive) return;
     if (tutorialStep < tutorialSteps.length - 1) {
       tutorialStep++;
       showTutorialStep();
@@ -877,22 +909,36 @@ export const App = (() => {
     }
   }
 
-  function prevTutorialStep() {
+  function prevTutorialStep(e) {
+    if (e) { e.preventDefault(); e.stopPropagation(); }
+    if (!tutorialActive) return;
     if (tutorialStep > 0) {
       tutorialStep--;
       showTutorialStep();
     }
   }
 
-  function skipTutorial() {
-    document.getElementById('tutorial-overlay').classList.add('hidden');
+  function skipTutorial(e) {
+    if (e) { e.preventDefault(); e.stopPropagation(); }
+    const overlay = hideOverlay();
+    tutorialActive = false;
+    document.body.dataset.tutorialActive = 'false';
     tutorialStep = 0;
+    // Double-check hide in case another handler re-shows it
+    setTimeout(() => hideOverlay(), 0);
+    setTimeout(() => hideOverlay(), 100);
   }
 
-  function finishTutorial() {
-    document.getElementById('tutorial-overlay').classList.add('hidden');
+  function finishTutorial(e) {
+    if (e) { e.preventDefault(); e.stopPropagation(); }
+    const overlay = hideOverlay();
+    tutorialActive = false;
+    document.body.dataset.tutorialActive = 'false';
     tutorialStep = 0;
     toast('Tutorial completed! Happy reasoning!');
+    // Double-check hide in case another handler re-shows it
+    setTimeout(() => hideOverlay(), 0);
+    setTimeout(() => hideOverlay(), 100);
   }
 
   function renderAll() {
