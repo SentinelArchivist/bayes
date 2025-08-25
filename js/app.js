@@ -712,12 +712,12 @@ export const App = (() => {
     document.querySelectorAll('.help-btn').forEach(btn => {
       btn.addEventListener('click', () => showHelp(btn.getAttribute('data-help')));
     });
-    document.getElementById('btn-tutorial').onclick = startTutorial;
+    document.getElementById('btn-tutorial').addEventListener('click', startTutorial);
     
     // Tutorial system
-    document.getElementById('btn-tutorial-next').onclick = nextTutorialStep;
-    document.getElementById('btn-tutorial-prev').onclick = prevTutorialStep;
-    document.getElementById('btn-tutorial-skip').onclick = skipTutorial;
+    document.getElementById('btn-tutorial-next').addEventListener('click', nextTutorialStep);
+    document.getElementById('btn-tutorial-prev').addEventListener('click', prevTutorialStep);
+    document.getElementById('btn-tutorial-skip').addEventListener('click', skipTutorial);
   }
 
   // ---------- Help System ----------
@@ -873,7 +873,7 @@ export const App = (() => {
       tutorialStep++;
       showTutorialStep();
     } else {
-      skipTutorial();
+      finishTutorial();
     }
   }
 
@@ -887,6 +887,12 @@ export const App = (() => {
   function skipTutorial() {
     document.getElementById('tutorial-overlay').classList.add('hidden');
     tutorialStep = 0;
+  }
+
+  function finishTutorial() {
+    document.getElementById('tutorial-overlay').classList.add('hidden');
+    tutorialStep = 0;
+    toast('Tutorial completed! Happy reasoning!');
   }
 
   function renderAll() {
