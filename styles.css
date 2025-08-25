@@ -100,6 +100,12 @@ input[type="file"] { display: none; }
 .tutorial-content p { margin: 0 0 1.5rem 0; line-height: 1.6; }
 .tutorial-actions { display: flex; gap: 0.5rem; justify-content: space-between; }
 
+/* Ensure the overlay truly hides when the 'hidden' class is applied.
+   The #tutorial-overlay selector has higher specificity than .hidden,
+   so we add an id+class rule to override display and prevent the
+   overlay from remaining visible after Finish/Skip. */
+#tutorial-overlay.hidden { display: none !important; }
+
 /* Accessibility */
 .sr-only { position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px; overflow: hidden; clip: rect(0,0,0,0); white-space: nowrap; border: 0; }
 button:focus, input:focus, select:focus { outline: 2px solid var(--primary); outline-offset: 2px; }
