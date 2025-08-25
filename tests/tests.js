@@ -64,4 +64,87 @@ test('tiny numbers do not underflow to NaN', () => {
   if (!approxEq(sum(post), 1, 1e-12)) throw new Error('sum');
 });
 
+test('all-zero likelihoods handled gracefully', () => {
+  const priors = [0.5, 0.5];
+  const L = [0, 0];
+  const post = Algorithms.bayesUpdate(priors, L);
+  if (!Number.isFinite(post[0]) || !Number.isFinite(post[1])) throw new Error('non-finite');
+  if (!approxEq(sum(post), 1, 1e-12)) throw new Error('sum');
+});
+
+test('extreme likelihood ratios', () => {
+  const priors = [0.5, 0.5];
+  const L = [1e-10, 1];
+  const post = Algorithms.bayesUpdate(priors, L);
+  if (!Number.isFinite(post[0]) || !Number.isFinite(post[1])) throw new Error('non-finite');
+  if (!approxEq(sum(post), 1, 1e-12)) throw new Error('sum');
+  if (post[1] <= post[0]) throw new Error('wrong ordering');
+});
+
+test('jeffreyUpdate with extreme weights', () => {
+  const current = [0.5, 0.5];
+  const like = [[0.1, 0.9], [0.9, 0.1]];
+  const q = [1e-10, 1 - 1e-10]; // extreme weight
+  const out = Algorithms.jeffreyUpdate(current, like, q);
+  if (!Number.isFinite(out[0]) || !Number.isFinite(out[1])) throw new Error('non-finite');
+  if (!approxEq(sum(out), 1, 1e-12)) throw new Error('sum');
+});
+
+test('jeffreyUpdate with many categories', () => {
+  const current = [0.3, 0.3, 0.4];
+  const like = [
+    [0.2, 0.3, 0.3, 0.2],
+    [0.4, 0.2, 0.2, 0.2], 
+    [0.1, 0.4, 0.4, 0.1]
+  ];
+  const q = [0.25, 0.25, 0.25, 0.25];
+  const out = Algorithms.jeffreyUpdate(current, like, q);
+  if (out.length !== 3) throw new Error('wrong length');
+  if (!approxEq(sum(out), 1, 1e-12)) throw new Error('sum');
+});
+
+test('normalizeProbs with mixed valid/invalid inputs', () => {
+  const out = Algorithms.normalizeProbs([0.5, NaN, 0.3, Infinity, -0.1]);
+  if (out.length !== 5) throw new Error('length');
+  if (!approxEq(sum(out), 1, 1e-12)) throw new Error('sum');
+  // Should treat NaN, Infinity, negative as 0
+  if (!approxEq(out[0], 0.5/0.8)) throw new Error('normalization');
+  if (!approxEq(out[2], 0.3/0.8)) throw new Error('normalization');
+});
+
+test('repeated updates maintain consistency', () => {
+  let current = [0.4, 0.6];
+  const evidenceSequence = [
+    [0.8, 0.2],
+    [0.3, 0.7],
+    [0.9, 0.1]
+  ];
+  
+  // Apply evidence sequentially
+  for (const L of evidenceSequence) {
+    current = Algorithms.bayesUpdate(current, L);
+    if (!approxEq(sum(current), 1, 1e-12)) throw new Error('sum after update');
+  }
+  
+  // Should be same as single combined update using log-space
+  let logPost = [Math.log(0.4), Math.log(0.6)];
+  for (const L of evidenceSequence) {
+    logPost[0] += Math.log(L[0]);
+    logPost[1] += Math.log(L[1]);
+  }
+  const maxLog = Math.max(...logPost);
+  const combined = logPost.map(lp => Math.exp(lp - maxLog));
+  const sumCombined = sum(combined);
+  const normalizedCombined = combined.map(v => v / sumCombined);
+  
+  if (!approxEq(current[0], normalizedCombined[0], 1e-10)) throw new Error('sequential vs combined');
+});
+
+test('scientific notation edge cases', () => {
+  const priors = [1e-300, 1 - 1e-300];
+  const L = [1e-300, 1e-300];
+  const post = Algorithms.bayesUpdate(priors, L);
+  if (!Number.isFinite(post[0]) || !Number.isFinite(post[1])) throw new Error('scientific notation failed');
+});
+
 log('All tests finished. Review any failures above.');

@@ -18,27 +18,47 @@ export const App = (() => {
   function clamp01(x) { return Math.max(0, Math.min(1, x)); }
 
   function parseProbInput(s) {
-    if (typeof s !== 'string') return 0;
+    if (typeof s !== 'string') return { value: 0, error: 'Input must be text' };
     s = s.trim();
-    if (!s) return 0;
-    // percent
-    if (s.endsWith('%')) {
-      const v = parseFloat(s.slice(0, -1));
-      if (!Number.isFinite(v)) return 0;
-      return clamp01(v / 100);
+    if (!s) return { value: 0, error: null };
+    
+    try {
+      // percent
+      if (s.endsWith('%')) {
+        const v = parseFloat(s.slice(0, -1));
+        if (!Number.isFinite(v)) return { value: 0, error: 'Invalid percentage format' };
+        if (v < 0) return { value: 0, error: 'Percentages cannot be negative' };
+        if (v > 100) return { value: 1, error: 'Percentage over 100% will be clamped to 100%' };
+        return { value: clamp01(v / 100), error: null };
+      }
+      
+      // fraction a/b
+      if (s.includes('/')) {
+        const parts = s.split('/');
+        if (parts.length !== 2) return { value: 0, error: 'Invalid fraction format (use a/b)' };
+        const [a, b] = parts.map(x => parseFloat(x.trim()));
+        if (!Number.isFinite(a) || !Number.isFinite(b)) return { value: 0, error: 'Invalid numbers in fraction' };
+        if (b === 0) return { value: 0, error: 'Division by zero in fraction' };
+        if (a < 0 || b < 0) return { value: 0, error: 'Negative numbers not allowed in probability fraction' };
+        const result = a / b;
+        if (result > 1) return { value: 1, error: 'Fraction greater than 1 will be clamped to 1' };
+        return { value: clamp01(result), error: null };
+      }
+      
+      // decimal or scientific
+      const v = parseFloat(s);
+      if (!Number.isFinite(v)) return { value: 0, error: 'Invalid number format' };
+      if (v < 0) return { value: 0, error: 'Probabilities cannot be negative' };
+      if (v > 1) return { value: 1, error: 'Probability greater than 1 will be clamped to 1' };
+      return { value: v, error: null };
+    } catch (e) {
+      return { value: 0, error: 'Failed to parse input: ' + e.message };
     }
-    // fraction a/b
-    if (s.includes('/')) {
-      const [a, b] = s.split('/').map(x => parseFloat(x.trim()));
-      if (!Number.isFinite(a) || !Number.isFinite(b) || b === 0) return 0;
-      return clamp01(a / b);
-    }
-    // decimal or scientific
-    const v = parseFloat(s);
-    if (!Number.isFinite(v)) return 0;
-    if (v > 1) return clamp01(v); // allow >1 temporarily (user error) -> clamp
-    if (v < 0) return 0;
-    return v;
+  }
+
+  // Legacy wrapper for backward compatibility
+  function parseProbInputValue(s) {
+    return parseProbInput(s).value;
   }
 
   function fmt(p) {
@@ -76,9 +96,32 @@ export const App = (() => {
   function save() { Storage.saveProject(project).catch(err => console.error(err)); }
 
   // ---------- Setup (Hypotheses + Priors) ----------
+  // Performance optimization: debounce input changes
+  function debounce(func, wait) {
+    let timeout;
+    return function executedFunction(...args) {
+      const later = () => {
+        clearTimeout(timeout);
+        func(...args);
+      };
+      clearTimeout(timeout);
+      timeout = setTimeout(later, wait);
+    };
+  }
+
+  const debouncedSave = debounce(() => save(), 300);
+  const debouncedUpdateSummary = debounce(() => updatePriorsSummary(), 100);
+  const debouncedRenderResults = debounce(() => renderResults(), 200);
+
   function renderSetup() {
     const tbody = document.getElementById('hypo-rows');
+    
+    // Performance: use DocumentFragment for batch DOM updates
+    const fragment = document.createDocumentFragment();
+    
+    // Clear existing content
     tbody.innerHTML = '';
+    
     for (const h of project.hypotheses) {
       const tr = document.createElement('tr');
       tr.innerHTML = `
@@ -90,34 +133,57 @@ export const App = (() => {
           <button class="secondary" data-act="del">Delete</button>
         </td>
       `;
+      
       const [labelInput, priorInput] = tr.querySelectorAll('input');
-      labelInput.addEventListener('change', () => { h.label = labelInput.value || h.label; save(); renderResults(); });
-      priorInput.addEventListener('change', () => { h.prior = parseProbInput(priorInput.value); save(); updatePriorsSummary(); });
+      
+      // Debounced input handlers for better performance
+      labelInput.addEventListener('input', debounce(() => { 
+        h.label = labelInput.value || h.label; 
+        debouncedSave(); 
+        debouncedRenderResults(); 
+      }, 300));
+      
+      priorInput.addEventListener('input', debounce(() => { 
+        const result = parseProbInput(priorInput.value);
+        if (result.error) {
+          priorInput.style.borderColor = 'var(--danger)';
+          priorInput.title = result.error;
+        } else {
+          priorInput.style.borderColor = '';
+          priorInput.title = '';
+        }
+        h.prior = result.value; 
+        debouncedSave(); 
+        debouncedUpdateSummary(); 
+      }, 300));
+      
       tr.querySelector('button[data-act="del"]').addEventListener('click', () => {
         if (project.hypotheses.length <= 1) { toast('Need at least one hypothesis'); return; }
         project.hypotheses = project.hypotheses.filter(x => x !== h);
         recomputeFromStart();
       });
+      
       tr.querySelector('button[data-act="up"]').addEventListener('click', () => {
         const idx = project.hypotheses.indexOf(h);
         if (idx > 0) {
-          const tmp = project.hypotheses[idx-1];
-          project.hypotheses[idx-1] = project.hypotheses[idx];
-          project.hypotheses[idx] = tmp;
+          [project.hypotheses[idx-1], project.hypotheses[idx]] = [project.hypotheses[idx], project.hypotheses[idx-1]];
           recomputeFromStart();
         }
       });
+      
       tr.querySelector('button[data-act="down"]').addEventListener('click', () => {
         const idx = project.hypotheses.indexOf(h);
         if (idx < project.hypotheses.length - 1) {
-          const tmp = project.hypotheses[idx+1];
-          project.hypotheses[idx+1] = project.hypotheses[idx];
-          project.hypotheses[idx] = tmp;
+          [project.hypotheses[idx], project.hypotheses[idx+1]] = [project.hypotheses[idx+1], project.hypotheses[idx]];
           recomputeFromStart();
         }
       });
-      tbody.appendChild(tr);
+      
+      fragment.appendChild(tr);
     }
+    
+    // Single DOM update
+    tbody.appendChild(fragment);
     updatePriorsSummary();
   }
 
@@ -159,7 +225,17 @@ export const App = (() => {
 
   function onApplyEvidenceCertain() {
     const inputs = document.querySelectorAll('#likelihood-rows input');
-    const L = Array.from(inputs).map(i => clamp01(parseProbInput(i.value)));
+    const L = Array.from(inputs).map(i => {
+      const result = parseProbInput(i.value);
+      if (result.error) {
+        i.style.borderColor = 'var(--danger)';
+        i.title = result.error;
+      } else {
+        i.style.borderColor = '';
+        i.title = '';
+      }
+      return clamp01(result.value);
+    });
     if (L.length !== project.hypotheses.length) { toast('Mismatch in likelihood entries'); return; }
     try {
       const next = Algorithms.bayesUpdate(currentPost(), L);
@@ -193,28 +269,75 @@ export const App = (() => {
       tr.innerHTML = `<td><input type="text" value="${label}" aria-label="Category"></td>
                       <td><input type="text" value="${w}" aria-label="Target weight"></td>
                       <td style="text-align:right"><button class="secondary" data-act="del">Delete</button></td>`;
+      
+      // Add event listeners
+      const [labelInput, weightInput] = tr.querySelectorAll('input');
+      const delBtn = tr.querySelector('button[data-act="del"]');
+      
+      labelInput.addEventListener('input', buildLikeTable);
+      weightInput.addEventListener('input', () => {
+        // Validate weight input
+        const result = parseProbInput(weightInput.value);
+        if (result.error) {
+          weightInput.style.borderColor = 'var(--danger)';
+          weightInput.title = result.error;
+        } else {
+          weightInput.style.borderColor = '';
+          weightInput.title = '';
+        }
+      });
+      
+      delBtn.addEventListener('click', () => {
+        if (catsBody.children.length <= 2) {
+          toast('Need at least two categories');
+          return;
+        }
+        tr.remove();
+        buildLikeTable();
+      });
+      
       catsBody.appendChild(tr);
     }
 
     function buildLikeTable() {
-      const catLabels = Array.from(catsBody.querySelectorAll('tr')).map(tr => tr.querySelector('input').value || 'Cat');
+      const catLabels = Array.from(catsBody.querySelectorAll('tr')).map(tr => {
+        const input = tr.querySelector('input');
+        return input ? (input.value || 'Cat') : 'Cat';
+      });
+      
       // header
       const cols = catLabels.map(l => `<th>${l}</th>`).join('');
       head.innerHTML = `<tr><th>Hypothesis</th>${cols}</tr>`;
-      // rows
+      
+      // rows - preserve existing values when rebuilding
+      const existingValues = {};
+      Array.from(body.querySelectorAll('tr')).forEach((tr, hIdx) => {
+        const inputs = tr.querySelectorAll('input');
+        existingValues[hIdx] = Array.from(inputs).map(inp => inp.value);
+      });
+      
       body.innerHTML = '';
-      for (const h of project.hypotheses) {
+      for (let hIdx = 0; hIdx < project.hypotheses.length; hIdx++) {
+        const h = project.hypotheses[hIdx];
         const tr = document.createElement('tr');
-        tr.innerHTML = `<td>${h.label}</td>` + catLabels.map(() => `<td><input type="text" value="" aria-label="P(Category|${h.label})"></td>`).join('');
+        const cells = catLabels.map((catLabel, cIdx) => {
+          const existingVal = existingValues[hIdx] && existingValues[hIdx][cIdx] ? existingValues[hIdx][cIdx] : '';
+          return `<td><input type="text" value="${existingVal}" aria-label="P(${catLabel}|${h.label})" placeholder="0.5"></td>`;
+        }).join('');
+        tr.innerHTML = `<td>${h.label}</td>${cells}`;
         body.appendChild(tr);
       }
     }
 
-    document.getElementById('btn-add-cat').onclick = () => { addCatRow('', ''); buildLikeTable(); };
+    document.getElementById('btn-add-cat').onclick = () => { 
+      addCatRow(`Cat${catsBody.children.length + 1}`, ''); 
+      buildLikeTable(); 
+    };
+    
     document.getElementById('btn-normalize-cats').onclick = () => {
       const rows = Array.from(catsBody.querySelectorAll('tr'));
       const wInputs = rows.map(r => r.querySelectorAll('input')[1]);
-      const ws = wInputs.map(i => parseProbInput(i.value));
+      const ws = wInputs.map(i => parseProbInputValue(i.value));
       const s = ws.reduce((a,b)=>a+b,0);
       const out = s>0? ws.map(v=>v/s): ws.map(()=> 1/ws.length);
       wInputs.forEach((i,idx)=> i.value = fmt(out[idx]));
@@ -226,14 +349,24 @@ export const App = (() => {
     if (catsRows.length < 2) { toast('Add at least two categories.'); return; }
     const catLabels = Array.from(catsRows).map(tr => tr.querySelector('input').value || 'Cat');
     const wInputs = Array.from(catsRows).map(tr => tr.querySelectorAll('input')[1]);
-    const qRaw = wInputs.map(i => parseProbInput(i.value));
+    const qRaw = wInputs.map(i => parseProbInputValue(i.value));
     const qSum = qRaw.reduce((a,b)=>a+b,0);
     const q = qSum>0? qRaw.map(v=>v/qSum): qRaw.map(()=>1/qRaw.length);
 
     const likeRows = document.querySelectorAll('#jeffrey-like-body tr');
     const likeMatrix = Array.from(likeRows).map(tr => {
       const inputs = tr.querySelectorAll('input');
-      const vals = Array.from(inputs).map(i => clamp01(parseProbInput(i.value)));
+      const vals = Array.from(inputs).map(i => {
+        const result = parseProbInput(i.value);
+        if (result.error) {
+          i.style.borderColor = 'var(--danger)';
+          i.title = result.error;
+        } else {
+          i.style.borderColor = '';
+          i.title = '';
+        }
+        return clamp01(result.value);
+      });
       const s = vals.reduce((a,b)=>a+b,0);
       return s>0? vals.map(v=>v/s): vals.map(()=> 1/vals.length);
     });
@@ -370,14 +503,100 @@ export const App = (() => {
     project = migrateProject(project);
   }
 
-  async function onExport() {
+  // ---------- Export Functions ----------
+  async function onExportJSON() {
     const data = await Storage.exportProjectJSON(project.id);
     const blob = new Blob([data], { type: 'application/json' });
+    downloadBlob(blob, `${project.name.replace(/\s+/g,'_')}.json`);
+  }
+
+  function onExportCSV() {
+    const post = currentPost();
+    const rows = [['Hypothesis', 'Posterior Probability']];
+    project.hypotheses.forEach((h, i) => {
+      rows.push([h.label, post[i].toString()]);
+    });
+    const csv = rows.map(row => row.map(cell => `"${cell}"`).join(',')).join('\n');
+    const blob = new Blob([csv], { type: 'text/csv' });
+    downloadBlob(blob, `${project.name.replace(/\s+/g,'_')}_results.csv`);
+  }
+
+  function onExportChartBar() {
+    exportChartAsPNG('#chart-bar', `${project.name.replace(/\s+/g,'_')}_posterior_chart.png`);
+  }
+
+  function onExportChartLine() {
+    exportChartAsPNG('#chart-line', `${project.name.replace(/\s+/g,'_')}_timeline_chart.png`);
+  }
+
+  function downloadBlob(blob, filename) {
     const a = document.createElement('a');
     a.href = URL.createObjectURL(blob);
-    a.download = `${project.name.replace(/\s+/g,'_')}.json`;
+    a.download = filename;
     a.click();
     URL.revokeObjectURL(a.href);
+  }
+
+  function exportChartAsPNG(selector, filename) {
+    const chartEl = document.querySelector(selector);
+    if (!chartEl) {
+      toast('Chart not found');
+      return;
+    }
+    
+    const svg = chartEl.querySelector('svg');
+    if (!svg) {
+      toast('No chart to export');
+      return;
+    }
+
+    // Create a canvas and draw the SVG
+    const canvas = document.createElement('canvas');
+    const ctx = canvas.getContext('2d');
+    const svgData = new XMLSerializer().serializeToString(svg);
+    const svgBlob = new Blob([svgData], { type: 'image/svg+xml;charset=utf-8' });
+    const url = URL.createObjectURL(svgBlob);
+    
+    const img = new Image();
+    img.onload = () => {
+      canvas.width = 800;
+      canvas.height = 400;
+      
+      // White background
+      ctx.fillStyle = '#ffffff';
+      ctx.fillRect(0, 0, canvas.width, canvas.height);
+      
+      // Draw SVG
+      ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
+      
+      // Convert to PNG and download
+      canvas.toBlob(blob => {
+        downloadBlob(blob, filename);
+        URL.revokeObjectURL(url);
+      }, 'image/png');
+    };
+    img.src = url;
+  }
+
+  function setupExportDropdown() {
+    const dropdown = document.querySelector('.export-dropdown');
+    const btn = document.getElementById('btn-export-menu');
+    
+    btn.addEventListener('click', (e) => {
+      e.stopPropagation();
+      dropdown.classList.toggle('open');
+    });
+    
+    // Close dropdown when clicking outside
+    document.addEventListener('click', () => {
+      dropdown.classList.remove('open');
+    });
+    
+    // Export handlers
+    document.getElementById('btn-export-json').onclick = onExportJSON;
+    document.getElementById('btn-export-csv').onclick = onExportCSV;
+    document.getElementById('btn-export-chart-bar').onclick = onExportChartBar;
+    document.getElementById('btn-export-chart-line').onclick = onExportChartLine;
   }
 
   async function onImport(file) {
@@ -429,13 +648,45 @@ export const App = (() => {
     const chips = document.querySelectorAll('.chip');
     const certain = document.getElementById('evidence-certain');
     const jeffrey = document.getElementById('evidence-jeffrey');
-    chips.forEach(ch => ch.addEventListener('click', () => {
-      chips.forEach(c => c.classList.remove('chip-active'));
-      ch.classList.add('chip-active');
-      const et = ch.getAttribute('data-etype');
-      if (et === 'certain') { certain.classList.remove('hidden'); jeffrey.classList.add('hidden'); }
-      else { certain.classList.add('hidden'); jeffrey.classList.remove('hidden'); }
-    }));
+    
+    chips.forEach(ch => {
+      ch.addEventListener('click', () => switchEvidenceTab(ch));
+      ch.addEventListener('keydown', (e) => {
+        if (e.key === 'Enter' || e.key === ' ') {
+          e.preventDefault();
+          switchEvidenceTab(ch);
+        }
+        // Arrow key navigation
+        if (e.key === 'ArrowLeft' || e.key === 'ArrowRight') {
+          e.preventDefault();
+          const current = Array.from(chips).indexOf(ch);
+          const next = e.key === 'ArrowRight' ? (current + 1) % chips.length : (current - 1 + chips.length) % chips.length;
+          chips[next].focus();
+        }
+      });
+    });
+    
+    function switchEvidenceTab(activeChip) {
+      chips.forEach(c => {
+        c.classList.remove('chip-active');
+        c.setAttribute('aria-selected', 'false');
+      });
+      activeChip.classList.add('chip-active');
+      activeChip.setAttribute('aria-selected', 'true');
+      
+      const et = activeChip.getAttribute('data-etype');
+      if (et === 'certain') { 
+        certain.classList.remove('hidden'); 
+        jeffrey.classList.add('hidden');
+        certain.setAttribute('aria-hidden', 'false');
+        jeffrey.setAttribute('aria-hidden', 'true');
+      } else { 
+        certain.classList.add('hidden'); 
+        jeffrey.classList.remove('hidden');
+        certain.setAttribute('aria-hidden', 'true');
+        jeffrey.setAttribute('aria-hidden', 'false');
+      }
+    }
   }
 
   function rnd() { return Math.random().toString(36).slice(2,9); }
@@ -449,11 +700,193 @@ export const App = (() => {
     document.getElementById('btn-redo').onclick = onRedo;
     document.getElementById('btn-clear-history').onclick = onClearLast;
     document.getElementById('btn-projects').onclick = openProjectsDialog;
-    document.getElementById('btn-export').onclick = onExport;
     document.getElementById('input-import').addEventListener('change', (e) => {
       const file = e.target.files?.[0]; if (file) onImport(file);
       e.target.value = '';
     });
+    
+    // Export dropdown
+    setupExportDropdown();
+    
+    // Help system
+    document.querySelectorAll('.help-btn').forEach(btn => {
+      btn.addEventListener('click', () => showHelp(btn.getAttribute('data-help')));
+    });
+    document.getElementById('btn-tutorial').onclick = startTutorial;
+    
+    // Tutorial system
+    document.getElementById('btn-tutorial-next').onclick = nextTutorialStep;
+    document.getElementById('btn-tutorial-prev').onclick = prevTutorialStep;
+    document.getElementById('btn-tutorial-skip').onclick = skipTutorial;
+  }
+
+  // ---------- Help System ----------
+  const helpContent = {
+    setup: {
+      title: 'Hypotheses & Priors',
+      body: `
+        <h4>What are hypotheses?</h4>
+        <p>Hypotheses are the possible explanations or outcomes you're considering. For example: "It will rain today" vs "It will not rain today".</p>
+        
+        <h4>What are priors?</h4>
+        <p>Priors represent your initial belief in each hypothesis before seeing any evidence. They should sum to 100%.</p>
+        
+        <h4>Input formats supported:</h4>
+        <ul>
+          <li><code>0.4</code> - Decimal (40%)</li>
+          <li><code>40%</code> - Percentage</li>
+          <li><code>2/5</code> - Fraction</li>
+          <li><code>1e-6</code> - Scientific notation</li>
+        </ul>
+        
+        <h4>Tips:</h4>
+        <ul>
+          <li>Use "Normalize Priors" to automatically make them sum to 100%</li>
+          <li>You can reorder hypotheses using the ↑↓ buttons</li>
+          <li>Give your hypotheses descriptive names</li>
+        </ul>
+      `
+    },
+    evidence: {
+      title: 'Adding Evidence',
+      body: `
+        <h4>Certain Evidence</h4>
+        <p>Use this when you know exactly what evidence you observed. Enter P(E|H) - the probability of seeing this evidence if each hypothesis were true.</p>
+        
+        <h4>Uncertain Evidence (Jeffrey Conditionalization)</h4>
+        <p>Use this when you're uncertain about what the evidence means. You define categories and your confidence in each category.</p>
+        
+        <h4>Example:</h4>
+        <p>If testing for a disease:</p>
+        <ul>
+          <li><strong>Certain:</strong> "Test result is positive" - enter P(positive test | has disease) and P(positive test | no disease)</li>
+          <li><strong>Uncertain:</strong> "I'm 70% sure the test is positive" - create categories "Positive/Negative" with weights 70%/30%</li>
+        </ul>
+      `
+    },
+    results: {
+      title: 'Understanding Results',
+      body: `
+        <h4>Posterior Probabilities</h4>
+        <p>These show your updated beliefs after considering the evidence. They represent P(H|E) - how likely each hypothesis is given the evidence.</p>
+        
+        <h4>Charts</h4>
+        <ul>
+          <li><strong>Bar Chart:</strong> Current posterior probabilities</li>
+          <li><strong>Line Chart:</strong> How your beliefs changed over time with each piece of evidence</li>
+        </ul>
+        
+        <h4>Interpreting Results</h4>
+        <p>Higher probabilities mean stronger belief in that hypothesis. The probabilities always sum to 100%.</p>
+      `
+    },
+    history: {
+      title: 'History & Undo',
+      body: `
+        <h4>Evidence History</h4>
+        <p>This shows all the evidence you've added in chronological order.</p>
+        
+        <h4>Undo/Redo</h4>
+        <ul>
+          <li><strong>Undo:</strong> Remove the last piece of evidence</li>
+          <li><strong>Redo:</strong> Restore evidence you just undid</li>
+          <li><strong>Clear Last:</strong> Permanently remove the most recent evidence</li>
+        </ul>
+        
+        <h4>Use Cases</h4>
+        <ul>
+          <li>Experiment with different evidence scenarios</li>
+          <li>Correct mistakes in evidence entry</li>
+          <li>See how each piece of evidence affected your beliefs</li>
+        </ul>
+      `
+    }
+  };
+
+  function showHelp(section) {
+    const dialog = document.getElementById('help-dialog');
+    const title = document.getElementById('help-title');
+    const body = document.getElementById('help-body');
+    
+    const content = helpContent[section];
+    if (content) {
+      title.textContent = content.title;
+      body.innerHTML = content.body;
+      dialog.showModal();
+    }
+  }
+
+  // ---------- Tutorial System ----------
+  let tutorialStep = 0;
+  const tutorialSteps = [
+    {
+      title: 'Welcome to Bayes!',
+      text: 'This app helps you apply Bayesian reasoning to any question. Let\'s walk through the basics.'
+    },
+    {
+      title: 'Step 1: Set Up Hypotheses',
+      text: 'Start by adding your hypotheses (possible explanations) and setting your initial beliefs (priors). Click on the "Setup" tab to begin.'
+    },
+    {
+      title: 'Step 2: Add Evidence',
+      text: 'Use the "Evidence" tab to add new information. Choose "Certain" if you know exactly what happened, or "Uncertain (Jeffrey)" if you\'re not completely sure.'
+    },
+    {
+      title: 'Step 3: View Results',
+      text: 'The "Results" tab shows your updated beliefs (posteriors) after considering the evidence. The charts help visualize how your beliefs changed.'
+    },
+    {
+      title: 'Step 4: Track History',
+      text: 'Use the "History" tab to see all evidence you\'ve added and undo changes if needed. You can experiment with different scenarios.'
+    },
+    {
+      title: 'You\'re Ready!',
+      text: 'That\'s the basic workflow. Click the ? buttons in each section for detailed help. Happy reasoning!'
+    }
+  ];
+
+  function startTutorial() {
+    tutorialStep = 0;
+    document.getElementById('help-dialog').close();
+    showTutorialStep();
+  }
+
+  function showTutorialStep() {
+    const overlay = document.getElementById('tutorial-overlay');
+    const title = document.getElementById('tutorial-title');
+    const text = document.getElementById('tutorial-text');
+    const prevBtn = document.getElementById('btn-tutorial-prev');
+    const nextBtn = document.getElementById('btn-tutorial-next');
+    
+    const step = tutorialSteps[tutorialStep];
+    title.textContent = step.title;
+    text.textContent = step.text;
+    
+    prevBtn.disabled = tutorialStep === 0;
+    nextBtn.textContent = tutorialStep === tutorialSteps.length - 1 ? 'Finish' : 'Next';
+    
+    overlay.classList.remove('hidden');
+  }
+
+  function nextTutorialStep() {
+    if (tutorialStep < tutorialSteps.length - 1) {
+      tutorialStep++;
+      showTutorialStep();
+    } else {
+      skipTutorial();
+    }
+  }
+
+  function prevTutorialStep() {
+    if (tutorialStep > 0) {
+      tutorialStep--;
+      showTutorialStep();
+    }
+  }
+
+  function skipTutorial() {
+    document.getElementById('tutorial-overlay').classList.add('hidden');
+    tutorialStep = 0;
   }
 
   function renderAll() {

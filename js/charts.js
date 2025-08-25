@@ -78,6 +78,10 @@ export const Charts = {
     const n = labels.length;
     const maxY = 1; // probabilities in [0,1]
 
+    // Performance optimization: skip rendering if too many data points
+    const maxRenderPoints = 1000;
+    const skipStep = steps > maxRenderPoints ? Math.ceil(steps / maxRenderPoints) : 1;
+
     // axes
     const xAxis = document.createElementNS(svg.namespaceURI, 'line');
     xAxis.setAttribute('x1', pad);
@@ -100,21 +104,42 @@ export const Charts = {
     const xScale = (i) => pad + (W - pad * 2) * (i / Math.max(1, steps - 1));
     const yScale = (v) => H - pad - (H - pad * 2) * (clamp01(v) / maxY);
 
+    // Performance: batch DOM operations
+    const fragment = document.createDocumentFragment();
+
     for (let k = 0; k < n; k++) {
       const color = colors[k % colors.length] || '#2a6df4';
       let d = '';
-      for (let i = 0; i < steps; i++) {
+      let hasStarted = false;
+      
+      for (let i = 0; i < steps; i += skipStep) {
         const v = timeline[i][k] ?? 0;
         const x = xScale(i);
         const y = yScale(v);
-        d += (i === 0 ? `M ${x} ${y}` : ` L ${x} ${y}`);
+        
+        if (!hasStarted) {
+          d += `M ${x} ${y}`;
+          hasStarted = true;
+        } else {
+          d += ` L ${x} ${y}`;
+        }
       }
+      
+      // Always include the last point if we're skipping
+      if (skipStep > 1 && (steps - 1) % skipStep !== 0) {
+        const lastIdx = steps - 1;
+        const v = timeline[lastIdx][k] ?? 0;
+        const x = xScale(lastIdx);
+        const y = yScale(v);
+        d += ` L ${x} ${y}`;
+      }
+      
       const path = document.createElementNS(svg.namespaceURI, 'path');
       path.setAttribute('d', d);
       path.setAttribute('fill', 'none');
       path.setAttribute('stroke', color);
       path.setAttribute('stroke-width', '2');
-      svg.appendChild(path);
+      fragment.appendChild(path);
     }
 
     // y-axis labels 0, 0.5, 1
@@ -127,7 +152,7 @@ export const Charts = {
       label.setAttribute('text-anchor', 'end');
       label.setAttribute('font-size', '10');
       label.textContent = format ? format(t) : t.toFixed(2);
-      svg.appendChild(label);
+      fragment.appendChild(label);
 
       const grid = document.createElementNS(svg.namespaceURI, 'line');
       grid.setAttribute('x1', pad);
@@ -137,9 +162,10 @@ export const Charts = {
       grid.setAttribute('stroke', '#e5e7eb');
       grid.setAttribute('stroke-width', '1');
       grid.setAttribute('stroke-dasharray', '3,3');
-      svg.appendChild(grid);
+      fragment.appendChild(grid);
     });
 
+    svg.appendChild(fragment);
     el.appendChild(svg);
   }
 };

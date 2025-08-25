@@ -27,14 +27,25 @@
     </nav>
     <div class="project-controls">
       <button id="btn-projects" class="secondary">Projects</button>
-      <button id="btn-export" class="secondary">Export JSON</button>
+      <div class="export-dropdown">
+        <button id="btn-export-menu" class="secondary">Export ▼</button>
+        <div class="dropdown-content">
+          <button id="btn-export-json">JSON</button>
+          <button id="btn-export-csv">CSV (Results)</button>
+          <button id="btn-export-chart-bar">Bar Chart (PNG)</button>
+          <button id="btn-export-chart-line">Timeline Chart (PNG)</button>
+        </div>
+      </div>
       <label class="import-label">Import JSON<input type="file" id="input-import" accept="application/json" /></label>
     </div>
   </header>
 
   <main>
     <section id="view-setup" class="view active" aria-labelledby="tab-setup">
-      <h2>Hypotheses & Priors</h2>
+      <div class="section-header">
+        <h2>Hypotheses & Priors</h2>
+        <button class="help-btn" data-help="setup" title="Show help for this section" aria-label="Show help for hypotheses and priors">?</button>
+      </div>
       <p class="help">Add your hypotheses and your initial chances (priors). You can type decimals (0.4), percentages (40%), fractions (1/3), or scientific notation (1e-6).</p>
       <div class="hypotheses">
         <table class="table">
@@ -52,12 +63,15 @@
     </section>
 
     <section id="view-evidence" class="view" aria-labelledby="tab-evidence">
-      <h2>Add Evidence</h2>
-      <div class="evidence-switcher">
-        <button class="chip chip-active" data-etype="certain">Certain</button>
-        <button class="chip" data-etype="jeffrey">Uncertain (Jeffrey)</button>
+      <div class="section-header">
+        <h2>Add Evidence</h2>
+        <button class="help-btn" data-help="evidence" title="Show help for this section" aria-label="Show help for adding evidence">?</button>
       </div>
-      <div id="evidence-certain" class="evidence-panel">
+      <div class="evidence-switcher">
+        <button class="chip chip-active" data-etype="certain" role="tab" aria-selected="true" aria-controls="evidence-certain">Certain</button>
+        <button class="chip" data-etype="jeffrey" role="tab" aria-selected="false" aria-controls="evidence-jeffrey">Uncertain (Jeffrey)</button>
+      </div>
+      <div id="evidence-certain" class="evidence-panel" role="tabpanel" aria-labelledby="evidence-certain-tab">
         <p class="help">Enter the likelihood of this evidence if each hypothesis were true (P(E|H)).</p>
         <table class="table">
           <thead><tr><th>Hypothesis</th><th>P(E|H)</th></tr></thead>
@@ -67,7 +81,7 @@
           <button id="btn-add-evidence-certain">Apply Evidence</button>
         </div>
       </div>
-      <div id="evidence-jeffrey" class="evidence-panel hidden">
+      <div id="evidence-jeffrey" class="evidence-panel hidden" role="tabpanel" aria-labelledby="evidence-jeffrey-tab">
         <p class="help">Define categories (a partition) and your target weights after seeing ambiguous evidence. Then set P(Category|H) for each hypothesis.</p>
         <div class="jeffrey-categories">
           <table class="table small">
@@ -93,7 +107,10 @@
     </section>
 
     <section id="view-results" class="view" aria-labelledby="tab-results">
-      <h2>Results</h2>
+      <div class="section-header">
+        <h2>Results</h2>
+        <button class="help-btn" data-help="results" title="Show help for this section" aria-label="Show help for understanding results">?</button>
+      </div>
       <div class="charts">
         <div class="chart-card">
           <h3>Current Posterior</h3>
@@ -113,12 +130,20 @@
     </section>
 
     <section id="view-history" class="view" aria-labelledby="tab-history">
-      <h2>History</h2>
+      <div class="section-header">
+        <h2>History</h2>
+        <button class="help-btn" data-help="history" title="Show help for this section" aria-label="Show help for history and undo features">?</button>
+      </div>
       <div id="history-list" class="history-list"></div>
       <div class="row-actions">
-        <button id="btn-undo" class="secondary">Undo</button>
-        <button id="btn-redo" class="secondary">Redo</button>
-        <button id="btn-clear-history" class="danger">Clear Last Evidence</button>
+        <button id="btn-undo" class="secondary" aria-describedby="undo-help">Undo</button>
+        <button id="btn-redo" class="secondary" aria-describedby="redo-help">Redo</button>
+        <button id="btn-clear-history" class="danger" aria-describedby="clear-help">Clear Last Evidence</button>
+        <div class="sr-only">
+          <div id="undo-help">Remove the last piece of evidence and restore previous beliefs</div>
+          <div id="redo-help">Restore the most recently undone evidence</div>
+          <div id="clear-help">Permanently remove the most recent evidence from history</div>
+        </div>
       </div>
     </section>
 
@@ -160,6 +185,35 @@
   </dialog>
 
   <div id="toaster" role="status" aria-live="polite"></div>
+
+  <!-- Help Modal -->
+  <dialog id="help-dialog">
+    <form method="dialog">
+      <div class="help-content">
+        <h3 id="help-title">Help</h3>
+        <div id="help-body"></div>
+        <div class="row-actions">
+          <button id="btn-tutorial" class="secondary">Start Tutorial</button>
+          <button value="cancel">Close</button>
+        </div>
+      </div>
+    </form>
+  </dialog>
+
+  <!-- Tutorial Overlay -->
+  <div id="tutorial-overlay" class="hidden">
+    <div class="tutorial-popup">
+      <div class="tutorial-content">
+        <h4 id="tutorial-title">Welcome to Bayes!</h4>
+        <p id="tutorial-text">Let's walk through how to use this app.</p>
+        <div class="tutorial-actions">
+          <button id="btn-tutorial-prev" class="secondary">Previous</button>
+          <button id="btn-tutorial-next">Next</button>
+          <button id="btn-tutorial-skip" class="secondary">Skip Tutorial</button>
+        </div>
+      </div>
+    </div>
+  </div>
 
   <script type="module" src="/js/main.js"></script>
 </body>

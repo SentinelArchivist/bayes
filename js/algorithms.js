@@ -24,10 +24,25 @@ function exp(x) {
 
 function logSumExp(logVals) {
   // returns log(sum_i exp(logVals[i])) stably
-  const maxLog = Math.max(...logVals);
-  if (!Number.isFinite(maxLog)) return -Infinity;
+  if (logVals.length === 0) return -Infinity;
+  
+  // Filter out -Infinity values
+  const finite = logVals.filter(x => Number.isFinite(x));
+  if (finite.length === 0) return -Infinity;
+  
+  const maxLog = Math.max(...finite);
+  if (maxLog === -Infinity) return -Infinity;
+  
   let s = 0;
-  for (const lv of logVals) s += Math.exp(lv - maxLog);
+  for (const lv of finite) {
+    const diff = lv - maxLog;
+    // Only add if difference is not too small to matter
+    if (diff > -745) { // exp(-745) ≈ 5e-324, near machine epsilon
+      s += Math.exp(diff);
+    }
+  }
+  
+  if (s === 0) return -Infinity;
   return maxLog + Math.log(s);
 }
 
@@ -47,14 +62,36 @@ export const Algorithms = {
     // priors: array of P(H_i), likelihoods: array of P(E|H_i)
     if (priors.length !== likelihoods.length) throw new Error('Length mismatch.');
     const n = priors.length;
+    
+    // Validate inputs
+    if (n === 0) throw new Error('Empty arrays provided.');
+    if (!priors.every(p => isFiniteProb(p))) throw new Error('Invalid prior probabilities.');
+    if (!likelihoods.every(l => isFiniteProb(l))) throw new Error('Invalid likelihood values.');
+    
+    // Check for all-zero likelihoods
+    if (likelihoods.every(l => l === 0)) {
+      console.warn('All likelihoods are zero - returning normalized priors');
+      return this.normalizeProbs(priors);
+    }
+    
     const logPost = new Array(n);
     for (let i = 0; i < n; i++) {
       const lp = log(priors[i]);
       const ll = log(likelihoods[i]);
       logPost[i] = lp + ll; // unnormalized log posterior
     }
+    
     const lz = logSumExp(logPost);
-    const post = logPost.map(v => (v - lz > -745 ? exp(v - lz) : 0)); // 745 ~ exp underflow threshold
+    if (!Number.isFinite(lz)) {
+      console.warn('Normalization constant is not finite - returning uniform distribution');
+      return new Array(n).fill(1/n);
+    }
+    
+    const post = logPost.map(v => {
+      const diff = v - lz;
+      return diff > -745 ? exp(diff) : 0; // 745 ~ exp underflow threshold
+    });
+    
     return this.normalizeProbs(post);
   },
 
