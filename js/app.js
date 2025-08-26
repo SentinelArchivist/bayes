@@ -700,10 +700,12 @@ export const App = (() => {
     document.getElementById('btn-redo').onclick = onRedo;
     document.getElementById('btn-clear-history').onclick = onClearLast;
     document.getElementById('btn-projects').onclick = openProjectsDialog;
-    document.getElementById('input-import').addEventListener('change', (e) => {
-      const file = e.target.files?.[0]; if (file) onImport(file);
-      e.target.value = '';
-    });
+    
+    // Import
+    document.getElementById('input-import').onchange = (e) => {
+      const file = e.target.files[0];
+      if (file) onImport(file);
+    };
     
     // Export dropdown
     setupExportDropdown();
@@ -712,13 +714,46 @@ export const App = (() => {
     document.querySelectorAll('.help-btn').forEach(btn => {
       btn.addEventListener('click', () => showHelp(btn.getAttribute('data-help')));
     });
-    document.getElementById('btn-tutorial').addEventListener('click', startTutorial);
+    const tutorialBtn = document.getElementById('btn-tutorial');
+    if (tutorialBtn) {
+      tutorialBtn.addEventListener('click', startTutorial);
+    }
     
     // Tutorial system
-    document.getElementById('btn-tutorial-next').addEventListener('click', nextTutorialStep);
-    document.getElementById('btn-tutorial-prev').addEventListener('click', prevTutorialStep);
-    document.getElementById('btn-tutorial-skip').addEventListener('click', skipTutorial);
+    const btnNext = document.getElementById('btn-tutorial-next');
+    const btnPrev = document.getElementById('btn-tutorial-prev');
+    const btnSkip = document.getElementById('btn-tutorial-skip');
+    
+    if (btnNext) {
+      btnNext.addEventListener('click', nextTutorialStep);
+    }
+    
+    if (btnPrev) {
+      btnPrev.addEventListener('click', prevTutorialStep);
+    }
+    
+    if (btnSkip) {
+      btnSkip.addEventListener('click', skipTutorial);
+    }
+    
+    // Guard against accidental form submissions
+    [btnNext, btnPrev, btnSkip].forEach(b => {
+      if (b) {
+        b.setAttribute('type','button');
+      }
+    });
+    
+    // Escape key kills overlay
+    window.addEventListener('keydown', (e) => {
+      if (e.key === 'Escape') { 
+        tutorialActive = false; 
+        document.body.dataset.tutorialActive = 'false'; 
+        hideOverlay(); 
+      }
+    });
+    
   }
+
 
   // ---------- Help System ----------
   const helpContent = {
@@ -846,11 +881,91 @@ export const App = (() => {
     }
   ];
 
+  // ========= Debug Utilities =========
+  const DBG_KEY = 'debugTutorial';
+  function isDebug() {
+    return typeof location !== 'undefined' && location.hash.includes('debug') || localStorage.getItem(DBG_KEY) === '1';
+  }
+  function ensureDebugPanel() {
+    if (!isDebug()) return;
+    if (document.getElementById('tutorial-debug-panel')) return;
+    const wrap = document.createElement('div');
+    wrap.id = 'tutorial-debug-panel';
+    wrap.style.cssText = 'position:fixed;right:8px;bottom:8px;width:360px;max-height:45vh;background:#111;color:#eee;z-index:99999;border:1px solid #444;border-radius:6px;box-shadow:0 2px 10px rgba(0,0,0,.4);display:flex;flex-direction:column;';
+    const header = document.createElement('div');
+    header.textContent = 'Tutorial Debug Logs';
+    header.style.cssText = 'font:12px/1.4 system-ui;padding:6px 8px;border-bottom:1px solid #333;background:#1a1a1a;display:flex;gap:6px;align-items:center;';
+    const btnCopy = document.createElement('button');
+    btnCopy.textContent = 'Copy';
+    btnCopy.style.cssText = 'margin-left:auto;font:12px system-ui;padding:2px 6px;';
+    const btnClear = document.createElement('button');
+    btnClear.textContent = 'Clear';
+    btnClear.style.cssText = 'font:12px system-ui;padding:2px 6px;';
+    header.appendChild(btnClear);
+    header.appendChild(btnCopy);
+    const ta = document.createElement('textarea');
+    ta.id = 'tutorial-debug-textarea';
+    ta.readOnly = true;
+    ta.style.cssText = 'flex:1;padding:6px 8px;background:#000;color:#0f0;font:11px/1.3 ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;border:0;resize:none;';
+    wrap.appendChild(header);
+    wrap.appendChild(ta);
+    document.body.appendChild(wrap);
+    btnCopy.onclick = async () => {
+      try { await navigator.clipboard.writeText(ta.value); } catch {}
+    };
+    btnClear.onclick = () => { window.__tutorialLogs = []; updateDebugPanel(); };
+    updateDebugPanel();
+  }
+  function updateDebugPanel() {
+    const ta = document.getElementById('tutorial-debug-textarea');
+    if (!ta) return;
+    const logs = window.__tutorialLogs || [];
+    ta.value = JSON.stringify(logs, null, 2);
+    ta.scrollTop = ta.scrollHeight;
+  }
+  function dbg(tag, data) {
+    const entry = { t: new Date().toISOString(), tag, data };
+    window.__tutorialLogs = window.__tutorialLogs || [];
+    window.__tutorialLogs.push(entry);
+    // ALWAYS log to console for debugging
+    try { console.log('[TUTORIAL]', tag, data); } catch {}
+    if (isDebug()) {
+      updateDebugPanel();
+    }
+  }
+  window.enableTutorialDebug = () => { localStorage.setItem(DBG_KEY,'1'); location.reload(); };
+  window.disableTutorialDebug = () => { localStorage.removeItem(DBG_KEY); location.reload(); };
+
+  // Debug: overlay state helper and observer
+  function overlayState() {
+    const el = document.getElementById('tutorial-overlay');
+    if (!el) return { error: 'overlay not found' };
+    return {
+      exists: !!el,
+      classList: Array.from(el.classList),
+      hiddenAttr: el.hasAttribute('hidden'),
+      ariaHidden: el.getAttribute('aria-hidden'),
+      styleDisplay: el.style.display || '(empty)',
+      styleVisibility: el.style.visibility || '(empty)',
+      stylePointer: el.style.pointerEvents || '(empty)',
+      computedDisplay: getComputedStyle(el).display,
+      computedVisibility: getComputedStyle(el).visibility,
+      bodyDataset: document.body && document.body.dataset ? { tutorialActive: document.body.dataset.tutorialActive } : {}
+    };
+  }
+
+  function logOverlay(tag) {
+    const state = overlayState();
+    dbg(tag, state);
+  }
+
+
   function showOverlay() {
     const overlay = document.getElementById('tutorial-overlay');
     overlay.removeAttribute('aria-hidden');
     overlay.removeAttribute('hidden');
     overlay.classList.remove('hidden');
+    overlay.style.removeProperty('display');
     overlay.style.display = 'flex';
     overlay.style.visibility = 'visible';
     overlay.style.pointerEvents = 'auto';
@@ -859,12 +974,11 @@ export const App = (() => {
 
   function hideOverlay() {
     const overlay = document.getElementById('tutorial-overlay');
-    overlay.setAttribute('aria-hidden', 'true');
-    overlay.setAttribute('hidden', '');
     overlay.classList.add('hidden');
+    overlay.setAttribute('hidden', 'true');
+    overlay.setAttribute('aria-hidden', 'true');
     overlay.style.display = 'none';
     overlay.style.visibility = 'hidden';
-    overlay.style.pointerEvents = 'none';
     return overlay;
   }
 
@@ -896,58 +1010,61 @@ export const App = (() => {
     overlay.style.display = 'flex';
     overlay.style.visibility = 'visible';
     overlay.style.pointerEvents = 'auto';
+    logOverlay(`showTutorialStep:${tutorialStep}`);
   }
 
   function nextTutorialStep(e) {
-    if (e) { e.preventDefault(); e.stopPropagation(); }
-    if (!tutorialActive) return;
+    console.log('[TUTORIAL] nextTutorialStep() called', { event: e, step: tutorialStep, active: tutorialActive });
+    if (e) { 
+      console.log('[TUTORIAL] Preventing default and stopping propagation');
+      e.preventDefault(); 
+      e.stopPropagation(); 
+    }
+    dbg('nextTutorialStep:click', { step: tutorialStep, active: tutorialActive });
+    if (!tutorialActive) {
+      console.log('[TUTORIAL] Tutorial not active, returning early');
+      return;
+    }
     if (tutorialStep < tutorialSteps.length - 1) {
+      console.log('[TUTORIAL] Moving to next step');
       tutorialStep++;
       showTutorialStep();
     } else {
+      console.log('[TUTORIAL] Last step reached, calling finishTutorial');
+      logOverlay('next->finish');
       finishTutorial();
     }
   }
 
   function prevTutorialStep(e) {
     if (e) { e.preventDefault(); e.stopPropagation(); }
+    dbg('prevTutorialStep:click', { step: tutorialStep });
     if (!tutorialActive) return;
     if (tutorialStep > 0) {
       tutorialStep--;
       showTutorialStep();
     }
+    logOverlay('prevTutorialStep');
   }
 
   function skipTutorial(e) {
-    if (e) { e.preventDefault(); e.stopPropagation(); }
-    const overlay = hideOverlay();
+    if (e) { 
+      e.preventDefault(); 
+      e.stopPropagation(); 
+    }
     tutorialActive = false;
     document.body.dataset.tutorialActive = 'false';
-    tutorialStep = 0;
-    // Double-check hide in case another handler re-shows it
-    setTimeout(() => hideOverlay(), 0);
-    setTimeout(() => hideOverlay(), 100);
+    hideOverlay();
   }
 
   function finishTutorial(e) {
-    if (e) { e.preventDefault(); e.stopPropagation(); }
-    const overlay = hideOverlay();
+    if (e) { 
+      e.preventDefault(); 
+      e.stopPropagation(); 
+    }
     tutorialActive = false;
     document.body.dataset.tutorialActive = 'false';
-    tutorialStep = 0;
-    toast('Tutorial completed! Happy reasoning!');
-    // Double-check hide in case another handler re-shows it
-    setTimeout(() => hideOverlay(), 0);
-    setTimeout(() => hideOverlay(), 100);
-  }
-
-  function renderAll() {
-    renderSetup();
-    renderEvidenceCertain();
-    renderEvidenceJeffrey();
-    renderResults();
-    renderHistory();
-    setupSettings();
+    hideOverlay();
   }
 
   return {
@@ -962,4 +1079,6 @@ export const App = (() => {
       toast('Ready. Create or open a project to begin.');
     }
   };
+  
+  return { start };
 })();
