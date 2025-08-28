@@ -12,7 +12,7 @@
   <meta name="apple-mobile-web-app-capable" content="yes">
   <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
   <meta name="apple-mobile-web-app-title" content="Bayes">
-  <meta http-equiv="Content-Security-Policy" content="default-src 'self'; img-src 'self' data:; style-src 'self' 'unsafe-inline'; script-src 'self' 'unsafe-inline'; font-src 'self' data:; connect-src 'self';">
+  <meta http-equiv="Content-Security-Policy" content="default-src 'self'; img-src 'self' data:; style-src 'self' 'unsafe-inline'; script-src 'self'; font-src 'self' data:; connect-src 'self';">
   <link rel="stylesheet" href="/styles.css">
 </head>
 <body>
@@ -73,6 +73,10 @@
       </div>
       <div id="evidence-certain" class="evidence-panel" role="tabpanel" aria-labelledby="evidence-certain-tab">
         <p class="help">Enter the likelihood of this evidence if each hypothesis were true (P(E|H)).</p>
+        <div class="evidence-label-input">
+          <label for="evidence-certain-label">Evidence Label (optional):</label>
+          <input type="text" id="evidence-certain-label" placeholder="e.g., 'Positive test result', 'Witness testimony'" />
+        </div>
         <table class="table">
           <thead><tr><th>Hypothesis</th><th>P(E|H)</th></tr></thead>
           <tbody id="likelihood-rows"></tbody>
@@ -83,6 +87,10 @@
       </div>
       <div id="evidence-jeffrey" class="evidence-panel hidden" role="tabpanel" aria-labelledby="evidence-jeffrey-tab">
         <p class="help">Define categories (a partition) and your target weights after seeing ambiguous evidence. Then set P(Category|H) for each hypothesis.</p>
+        <div class="evidence-label-input">
+          <label for="evidence-jeffrey-label">Evidence Label (optional):</label>
+          <input type="text" id="evidence-jeffrey-label" placeholder="e.g., 'Ambiguous test result', 'Mixed signals'" />
+        </div>
         <div class="jeffrey-categories">
           <table class="table small">
             <thead><tr><th>Category</th><th>Target Weight</th><th></th></tr></thead>

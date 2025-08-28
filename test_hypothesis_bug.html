@@ -1,0 +1,173 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Test Hypothesis Bug</title>
+    <link rel="stylesheet" href="/styles.css">
+    <style>
+        .debug-info {
+            position: fixed;
+            top: 10px;
+            right: 10px;
+            width: 350px;
+            background: #f8f9fa;
+            border: 1px solid #dee2e6;
+            border-radius: 8px;
+            padding: 1rem;
+            font-size: 12px;
+            max-height: 80vh;
+            overflow-y: auto;
+            z-index: 9999;
+        }
+        .debug-section {
+            margin: 0.5rem 0;
+            padding: 0.5rem;
+            background: white;
+            border-radius: 4px;
+        }
+        .hypothesis-count { color: #007bff; font-weight: bold; }
+        .timeline-info { color: #28a745; }
+        .error { color: #dc3545; }
+    </style>
+</head>
+<body>
+    <div class="debug-info">
+        <h4>Hypothesis Debug Info</h4>
+        <div id="debug-content">Loading...</div>
+        <button id="refresh-debug" style="margin-top: 0.5rem;">Refresh</button>
+    </div>
+
+    <!-- Main app structure -->
+    <header class="app-header">
+        <h1>Bayes</h1>
+        <nav class="tabs" role="tablist" aria-label="Primary">
+            <button class="tab active" data-tab="setup" role="tab" aria-selected="true">Setup</button>
+            <button class="tab" data-tab="results" role="tab" aria-selected="false">Results</button>
+        </nav>
+    </header>
+
+    <main>
+        <section id="view-setup" class="view active">
+            <div class="section-header">
+                <h2>Hypotheses & Priors</h2>
+            </div>
+            <div class="hypotheses">
+                <table class="table">
+                    <thead>
+                        <tr><th>Label</th><th>Prior</th><th>Actions</th></tr>
+                    </thead>
+                    <tbody id="hypo-rows"></tbody>
+                </table>
+                <div class="row-actions">
+                    <button id="btn-add-hypo">Add Hypothesis</button>
+                    <button id="btn-normalize" class="secondary">Normalize Priors</button>
+                </div>
+                <div id="priors-summary" class="muted"></div>
+            </div>
+        </section>
+
+        <section id="view-results" class="view">
+            <h2>Results</h2>
+            <div class="results-table">
+                <table class="table">
+                    <thead><tr><th>Hypothesis</th><th>Posterior</th></tr></thead>
+                    <tbody id="results-rows"></tbody>
+                </table>
+            </div>
+        </section>
+    </main>
+
+    <div id="toaster" role="status" aria-live="polite"></div>
+
+    <script type="module">
+        import { Algorithms } from './js/algorithms.js';
+        import { Storage } from './js/storage.js';
+        import { Charts } from './js/charts.js';
+        import { App } from './js/app.js';
+
+        const debugContent = document.getElementById('debug-content');
+        const refreshBtn = document.getElementById('refresh-debug');
+
+        let appProject = null;
+
+        function updateDebugInfo() {
+            if (!appProject) {
+                debugContent.innerHTML = '<div class="error">No project loaded</div>';
+                return;
+            }
+
+            const hypotheses = appProject.hypotheses || [];
+            const timeline = appProject.timeline || [];
+            const currentPosteriors = timeline[timeline.length - 1] || [];
+
+            let html = `
+                <div class="debug-section">
+                    <strong>Project:</strong> ${appProject.name}<br>
+                    <strong>ID:</strong> ${appProject.id}
+                </div>
+                <div class="debug-section">
+                    <div class="hypothesis-count">Hypotheses Count: ${hypotheses.length}</div>
+                    ${hypotheses.map((h, i) => `
+                        <div style="margin: 0.25rem 0; padding: 0.25rem; background: #f8f9fa; border-radius: 3px;">
+                            <strong>${h.label}</strong><br>
+                            Prior: ${h.prior}<br>
+                            Current: ${currentPosteriors[i] || 'N/A'}<br>
+                            ID: ${h.id}
+                        </div>
+                    `).join('')}
+                </div>
+                <div class="debug-section">
+                    <div class="timeline-info">Timeline Length: ${timeline.length}</div>
+                    ${timeline.map((step, i) => `
+                        <div>Step ${i}: [${step.map(p => p.toFixed(3)).join(', ')}]</div>
+                    `).join('')}
+                </div>
+                <div class="debug-section">
+                    <strong>DOM Elements:</strong><br>
+                    hypo-rows: ${document.getElementById('hypo-rows') ? 'Found' : 'Missing'}<br>
+                    results-rows: ${document.getElementById('results-rows') ? 'Found' : 'Missing'}<br>
+                    Table rows in hypo-rows: ${document.querySelectorAll('#hypo-rows tr').length}
+                </div>
+            `;
+
+            debugContent.innerHTML = html;
+        }
+
+        async function initializeApp() {
+            try {
+                debugContent.innerHTML = 'Initializing app...';
+                
+                // Start the app
+                await App.start({ Algorithms, Storage, Charts });
+                
+                // Access the internal project (we need to modify App to expose this)
+                // For now, let's create our own project to test
+                await Storage.init();
+                const projects = await Storage.listProjects();
+                
+                if (projects.length > 0) {
+                    appProject = await Storage.loadProject(projects[0].id);
+                } else {
+                    appProject = await Storage.createProject('Test Project');
+                }
+                
+                debugContent.innerHTML = 'App initialized. Checking project...';
+                updateDebugInfo();
+                
+                // Set up periodic updates
+                setInterval(updateDebugInfo, 2000);
+                
+            } catch (error) {
+                debugContent.innerHTML = `<div class="error">Error: ${error.message}</div>`;
+                console.error('App initialization error:', error);
+            }
+        }
+
+        refreshBtn.addEventListener('click', updateDebugInfo);
+
+        // Initialize
+        initializeApp();
+    </script>
+</body>
+</html>

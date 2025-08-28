@@ -1,0 +1,89 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Debug Storage & Project Creation</title>
+    <style>
+        body { font-family: monospace; padding: 20px; }
+        .debug { background: #f8f9fa; padding: 10px; margin: 10px 0; border-radius: 4px; }
+        .error { background: #ffe6e6; color: #d63384; }
+        .success { background: #e6ffe6; color: #198754; }
+        .info { background: #e6f3ff; color: #0d6efd; }
+    </style>
+</head>
+<body>
+    <h1>Storage & Project Debug</h1>
+    <div id="output"></div>
+    <button onclick="runDebug()">Run Debug</button>
+
+    <script type="module">
+        import { Storage } from './js/storage.js';
+
+        const output = document.getElementById('output');
+
+        function log(type, message) {
+            const div = document.createElement('div');
+            div.className = `debug ${type}`;
+            div.innerHTML = `<strong>[${type.toUpperCase()}]</strong> ${message}`;
+            output.appendChild(div);
+        }
+
+        window.runDebug = async function() {
+            output.innerHTML = '';
+            
+            try {
+                log('info', 'Initializing storage...');
+                await Storage.init();
+                
+                log('info', 'Clearing existing projects...');
+                const existing = await Storage.listProjects();
+                for (const proj of existing) {
+                    await Storage.deleteProject(proj.id);
+                }
+                
+                log('info', 'Creating new project...');
+                const newProject = await Storage.createProject('Debug Project');
+                
+                log('success', `Project created with ID: ${newProject.id}`);
+                log('info', `Project name: ${newProject.name}`);
+                log('info', `Hypotheses count: ${newProject.hypotheses?.length || 0}`);
+                
+                if (newProject.hypotheses) {
+                    newProject.hypotheses.forEach((h, i) => {
+                        log('info', `H${i+1}: label="${h.label}", prior=${h.prior}, id=${h.id}`);
+                    });
+                }
+                
+                log('info', `Timeline length: ${newProject.timeline?.length || 0}`);
+                if (newProject.timeline && newProject.timeline[0]) {
+                    log('info', `Timeline[0]: [${newProject.timeline[0].join(', ')}]`);
+                }
+                
+                log('info', 'Loading project back from storage...');
+                const loaded = await Storage.loadProject(newProject.id);
+                
+                if (loaded) {
+                    log('success', 'Project loaded successfully');
+                    log('info', `Loaded hypotheses count: ${loaded.hypotheses?.length || 0}`);
+                    
+                    if (loaded.hypotheses) {
+                        loaded.hypotheses.forEach((h, i) => {
+                            log('info', `Loaded H${i+1}: label="${h.label}", prior=${h.prior}, id=${h.id}`);
+                        });
+                    }
+                } else {
+                    log('error', 'Failed to load project back');
+                }
+                
+            } catch (error) {
+                log('error', `Error: ${error.message}`);
+                console.error('Debug error:', error);
+            }
+        };
+        
+        // Auto-run
+        setTimeout(() => window.runDebug(), 500);
+    </script>
+</body>
+</html>

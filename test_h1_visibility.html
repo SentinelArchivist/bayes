@@ -1,0 +1,382 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>H1 Visibility Test - Bayes App</title>
+    <link rel="stylesheet" href="styles.css">
+    <style>
+        .test-section {
+            margin: 20px 0;
+            padding: 15px;
+            border: 1px solid #ddd;
+            border-radius: 5px;
+        }
+        .test-result {
+            padding: 10px;
+            margin: 5px 0;
+            border-radius: 3px;
+        }
+        .pass { background-color: #d4edda; color: #155724; }
+        .fail { background-color: #f8d7da; color: #721c24; }
+        .info { background-color: #d1ecf1; color: #0c5460; }
+        .debug-info {
+            background-color: #f8f9fa;
+            border: 1px solid #dee2e6;
+            padding: 10px;
+            margin: 10px 0;
+            border-radius: 3px;
+            font-family: monospace;
+            white-space: pre-wrap;
+        }
+        button {
+            margin: 5px;
+            padding: 8px 16px;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>H1 Hypothesis Visibility Test</h1>
+        
+        <div class="test-section">
+            <h2>Test Controls</h2>
+            <button onclick="runAllTests()">Run All Tests</button>
+            <button onclick="clearResults()">Clear Results</button>
+            <button onclick="inspectProject()">Inspect Project Data</button>
+            <button onclick="forceRender()">Force Re-render</button>
+        </div>
+
+        <div class="test-section">
+            <h2>Test Results</h2>
+            <div id="test-results"></div>
+        </div>
+
+        <div class="test-section">
+            <h2>Debug Information</h2>
+            <div id="debug-info" class="debug-info"></div>
+        </div>
+
+        <div class="test-section">
+            <h2>Live App View</h2>
+            <div class="tabs">
+                <button class="tab-btn active" data-tab="setup">Setup</button>
+                <button class="tab-btn" data-tab="evidence">Evidence</button>
+                <button class="tab-btn" data-tab="results">Results</button>
+            </div>
+
+            <div id="setup" class="tab-content active">
+                <h3>Hypotheses & Priors</h3>
+                <div class="priors-summary">
+                    <span id="priors-sum">Sum: 100%</span>
+                    <button onclick="App.onNormalizePriors()">Normalize</button>
+                </div>
+                <table>
+                    <thead>
+                        <tr>
+                            <th>Hypothesis</th>
+                            <th>Prior</th>
+                            <th>Actions</th>
+                        </tr>
+                    </thead>
+                    <tbody id="hypo-rows"></tbody>
+                </table>
+                <button onclick="App.onAddHypothesis()">Add Hypothesis</button>
+            </div>
+
+            <div id="evidence" class="tab-content">
+                <h3>Evidence</h3>
+                <div class="evidence-section">
+                    <h4>Certain Evidence</h4>
+                    <table>
+                        <thead>
+                            <tr>
+                                <th>Hypothesis</th>
+                                <th>P(E|H)</th>
+                            </tr>
+                        </thead>
+                        <tbody id="likelihood-rows"></tbody>
+                    </table>
+                </div>
+            </div>
+
+            <div id="results" class="tab-content">
+                <h3>Results</h3>
+                <div id="results-chart"></div>
+                <div id="results-table"></div>
+            </div>
+        </div>
+    </div>
+
+    <script src="js/algorithms.js"></script>
+    <script src="js/charts.js"></script>
+    <script src="js/storage.js"></script>
+    <script src="js/app.js"></script>
+    <script>
+        let testResults = [];
+
+        function log(message) {
+            console.log(message);
+            const debugDiv = document.getElementById('debug-info');
+            debugDiv.textContent += new Date().toLocaleTimeString() + ': ' + message + '\n';
+            debugDiv.scrollTop = debugDiv.scrollHeight;
+        }
+
+        function addTestResult(testName, passed, message) {
+            testResults.push({ testName, passed, message });
+            const resultsDiv = document.getElementById('test-results');
+            const resultDiv = document.createElement('div');
+            resultDiv.className = `test-result ${passed ? 'pass' : 'fail'}`;
+            resultDiv.innerHTML = `<strong>${testName}:</strong> ${passed ? 'PASS' : 'FAIL'} - ${message}`;
+            resultsDiv.appendChild(resultDiv);
+        }
+
+        function clearResults() {
+            testResults = [];
+            document.getElementById('test-results').innerHTML = '';
+            document.getElementById('debug-info').textContent = '';
+        }
+
+        function inspectProject() {
+            const project = window.project || App.getProject();
+            log('Project inspection:');
+            log(JSON.stringify(project, null, 2));
+        }
+
+        function forceRender() {
+            log('Forcing re-render...');
+            App.renderAll();
+        }
+
+        async function runAllTests() {
+            clearResults();
+            log('Starting comprehensive H1 visibility tests...');
+
+            // Wait for app to initialize
+            await new Promise(resolve => setTimeout(resolve, 500));
+
+            // Test 1: Project initialization
+            testProjectInitialization();
+
+            // Test 2: DOM structure
+            testDOMStructure();
+
+            // Test 3: Hypothesis rendering
+            testHypothesisRendering();
+
+            // Test 4: H1 specific visibility
+            testH1Visibility();
+
+            // Test 5: UI interactions
+            testUIInteractions();
+
+            // Test 6: Evidence rendering
+            testEvidenceRendering();
+
+            // Summary
+            const passed = testResults.filter(r => r.passed).length;
+            const total = testResults.length;
+            log(`\nTest Summary: ${passed}/${total} tests passed`);
+            
+            if (passed === total) {
+                addTestResult('OVERALL', true, 'All tests passed! H1 visibility issue appears to be resolved.');
+            } else {
+                addTestResult('OVERALL', false, `${total - passed} tests failed. H1 visibility issue may persist.`);
+            }
+        }
+
+        function testProjectInitialization() {
+            log('Testing project initialization...');
+            
+            const project = window.project || App.getProject();
+            
+            if (!project) {
+                addTestResult('Project Exists', false, 'No project found');
+                return;
+            }
+            addTestResult('Project Exists', true, `Project ID: ${project.id}`);
+
+            if (!Array.isArray(project.hypotheses)) {
+                addTestResult('Hypotheses Array', false, 'Hypotheses is not an array');
+                return;
+            }
+            addTestResult('Hypotheses Array', true, `Found ${project.hypotheses.length} hypotheses`);
+
+            if (project.hypotheses.length < 2) {
+                addTestResult('Minimum Hypotheses', false, `Only ${project.hypotheses.length} hypotheses found, need at least 2`);
+                return;
+            }
+            addTestResult('Minimum Hypotheses', true, `${project.hypotheses.length} hypotheses found`);
+
+            const h1 = project.hypotheses.find(h => h.id === 'h1' || h.label === 'H1');
+            const h2 = project.hypotheses.find(h => h.id === 'h2' || h.label === 'H2');
+
+            addTestResult('H1 Exists in Data', !!h1, h1 ? `H1: ${JSON.stringify(h1)}` : 'H1 not found in project data');
+            addTestResult('H2 Exists in Data', !!h2, h2 ? `H2: ${JSON.stringify(h2)}` : 'H2 not found in project data');
+        }
+
+        function testDOMStructure() {
+            log('Testing DOM structure...');
+            
+            const hypoRows = document.getElementById('hypo-rows');
+            addTestResult('Hypo Rows Element', !!hypoRows, hypoRows ? 'hypo-rows element found' : 'hypo-rows element missing');
+
+            const likelihoodRows = document.getElementById('likelihood-rows');
+            addTestResult('Likelihood Rows Element', !!likelihoodRows, likelihoodRows ? 'likelihood-rows element found' : 'likelihood-rows element missing');
+        }
+
+        function testHypothesisRendering() {
+            log('Testing hypothesis rendering...');
+            
+            const hypoRows = document.getElementById('hypo-rows');
+            if (!hypoRows) {
+                addTestResult('Hypothesis Rows Rendered', false, 'hypo-rows element not found');
+                return;
+            }
+
+            const rows = hypoRows.children;
+            addTestResult('Hypothesis Rows Count', rows.length >= 2, `Found ${rows.length} rows, expected at least 2`);
+
+            for (let i = 0; i < rows.length; i++) {
+                const row = rows[i];
+                const isVisible = window.getComputedStyle(row).display !== 'none';
+                const hasContent = row.cells && row.cells.length >= 2;
+                
+                addTestResult(`Row ${i + 1} Visible`, isVisible, `Row ${i + 1} display: ${window.getComputedStyle(row).display}`);
+                addTestResult(`Row ${i + 1} Content`, hasContent, `Row ${i + 1} has ${row.cells ? row.cells.length : 0} cells`);
+            }
+        }
+
+        function testH1Visibility() {
+            log('Testing H1 specific visibility...');
+            
+            const hypoRows = document.getElementById('hypo-rows');
+            if (!hypoRows) {
+                addTestResult('H1 Row Search', false, 'hypo-rows element not found');
+                return;
+            }
+
+            // Look for H1 row specifically
+            let h1Row = null;
+            for (let i = 0; i < hypoRows.children.length; i++) {
+                const row = hypoRows.children[i];
+                const labelInput = row.querySelector('input[type="text"]');
+                if (labelInput && (labelInput.value === 'H1' || labelInput.value === 'h1')) {
+                    h1Row = row;
+                    break;
+                }
+            }
+
+            if (!h1Row) {
+                addTestResult('H1 Row Found', false, 'No row with H1 label found');
+                return;
+            }
+            addTestResult('H1 Row Found', true, 'H1 row located in DOM');
+
+            const isVisible = window.getComputedStyle(h1Row).display !== 'none';
+            addTestResult('H1 Row Visible', isVisible, `H1 row display: ${window.getComputedStyle(h1Row).display}`);
+
+            const labelInput = h1Row.querySelector('input[type="text"]');
+            const priorInput = h1Row.querySelectorAll('input[type="text"]')[1];
+            
+            addTestResult('H1 Label Input', !!labelInput, labelInput ? `Label: "${labelInput.value}"` : 'Label input not found');
+            addTestResult('H1 Prior Input', !!priorInput, priorInput ? `Prior: "${priorInput.value}"` : 'Prior input not found');
+
+            if (labelInput) {
+                const labelVisible = window.getComputedStyle(labelInput).display !== 'none';
+                addTestResult('H1 Label Input Visible', labelVisible, `Label input display: ${window.getComputedStyle(labelInput).display}`);
+            }
+
+            if (priorInput) {
+                const priorVisible = window.getComputedStyle(priorInput).display !== 'none';
+                addTestResult('H1 Prior Input Visible', priorVisible, `Prior input display: ${window.getComputedStyle(priorInput).display}`);
+            }
+        }
+
+        function testUIInteractions() {
+            log('Testing UI interactions...');
+            
+            const hypoRows = document.getElementById('hypo-rows');
+            if (!hypoRows || hypoRows.children.length === 0) {
+                addTestResult('UI Interaction Test', false, 'No hypothesis rows to test');
+                return;
+            }
+
+            // Test first row (should be H1)
+            const firstRow = hypoRows.children[0];
+            const labelInput = firstRow.querySelector('input[type="text"]');
+            const buttons = firstRow.querySelectorAll('button');
+
+            addTestResult('H1 Buttons Present', buttons.length >= 3, `Found ${buttons.length} buttons (expected 3: up, down, delete)`);
+
+            if (labelInput) {
+                const originalValue = labelInput.value;
+                labelInput.value = 'Test H1';
+                labelInput.dispatchEvent(new Event('input'));
+                
+                setTimeout(() => {
+                    const project = window.project || App.getProject();
+                    const h1Updated = project.hypotheses[0].label === 'Test H1';
+                    addTestResult('H1 Label Update', h1Updated, h1Updated ? 'Label update successful' : 'Label update failed');
+                    
+                    // Restore original value
+                    labelInput.value = originalValue;
+                    labelInput.dispatchEvent(new Event('input'));
+                }, 100);
+            }
+        }
+
+        function testEvidenceRendering() {
+            log('Testing evidence rendering...');
+            
+            const likelihoodRows = document.getElementById('likelihood-rows');
+            if (!likelihoodRows) {
+                addTestResult('Evidence Rendering', false, 'likelihood-rows element not found');
+                return;
+            }
+
+            const rows = likelihoodRows.children;
+            addTestResult('Evidence Rows Count', rows.length >= 2, `Found ${rows.length} evidence rows, expected at least 2`);
+
+            // Look for H1 in evidence table
+            let h1EvidenceRow = null;
+            for (let i = 0; i < rows.length; i++) {
+                const row = rows[i];
+                const firstCell = row.cells[0];
+                if (firstCell && firstCell.textContent.includes('H1')) {
+                    h1EvidenceRow = row;
+                    break;
+                }
+            }
+
+            addTestResult('H1 Evidence Row', !!h1EvidenceRow, h1EvidenceRow ? 'H1 found in evidence table' : 'H1 not found in evidence table');
+        }
+
+        // Tab functionality
+        document.addEventListener('DOMContentLoaded', function() {
+            const tabBtns = document.querySelectorAll('.tab-btn');
+            const tabContents = document.querySelectorAll('.tab-content');
+
+            tabBtns.forEach(btn => {
+                btn.addEventListener('click', () => {
+                    const targetTab = btn.dataset.tab;
+                    
+                    tabBtns.forEach(b => b.classList.remove('active'));
+                    tabContents.forEach(c => c.classList.remove('active'));
+                    
+                    btn.classList.add('active');
+                    document.getElementById(targetTab).classList.add('active');
+                });
+            });
+
+            // Initialize app and run tests after a delay
+            setTimeout(() => {
+                log('App initialized, ready for testing');
+            }, 1000);
+        });
+
+        // Initialize the app
+        App.start();
+    </script>
+</body>
+</html>

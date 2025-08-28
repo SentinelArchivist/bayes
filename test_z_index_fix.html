@@ -1,0 +1,361 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Z-Index Fix Test - Bayes App</title>
+    <link rel="stylesheet" href="styles.css">
+    <style>
+        .test-section {
+            margin: 20px 0;
+            padding: 15px;
+            border: 1px solid #ddd;
+            border-radius: 5px;
+            background: white;
+        }
+        .test-result {
+            padding: 10px;
+            margin: 5px 0;
+            border-radius: 3px;
+        }
+        .pass { background-color: #d4edda; color: #155724; }
+        .fail { background-color: #f8d7da; color: #721c24; }
+        .info { background-color: #d1ecf1; color: #0c5460; }
+        .visual-test {
+            border: 2px solid #007bff;
+            padding: 20px;
+            margin: 10px 0;
+            background: #f8f9fa;
+        }
+        .highlight-h1 {
+            background-color: yellow !important;
+            border: 3px solid red !important;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>Z-Index Fix Verification Test</h1>
+        
+        <div class="test-section">
+            <h2>Test Controls</h2>
+            <button onclick="runZIndexTests()">Run Z-Index Tests</button>
+            <button onclick="highlightH1Elements()">Highlight H1 Elements</button>
+            <button onclick="clearHighlights()">Clear Highlights</button>
+            <button onclick="inspectLayering()">Inspect Element Layering</button>
+        </div>
+
+        <div class="test-section">
+            <h2>Test Results</h2>
+            <div id="test-results"></div>
+        </div>
+
+        <div class="visual-test">
+            <h2>Visual Test - Setup Tab</h2>
+            <div class="tabs">
+                <button class="tab-btn active" data-tab="setup">Setup</button>
+                <button class="tab-btn" data-tab="evidence">Evidence</button>
+                <button class="tab-btn" data-tab="jeffrey">Jeffrey</button>
+            </div>
+
+            <div id="setup" class="tab-content active">
+                <h3>Hypotheses & Priors</h3>
+                <table class="table">
+                    <thead>
+                        <tr>
+                            <th>Label</th>
+                            <th>Prior</th>
+                            <th>Actions</th>
+                        </tr>
+                    </thead>
+                    <tbody id="hypo-rows">
+                        <!-- H1 and H2 rows will be rendered here -->
+                    </tbody>
+                </table>
+                <button onclick="App.onAddHypothesis()">Add Hypothesis</button>
+            </div>
+
+            <div id="evidence" class="tab-content">
+                <h3>Evidence - Certain</h3>
+                <table class="table">
+                    <thead>
+                        <tr>
+                            <th>Hypothesis</th>
+                            <th>P(E|H)</th>
+                        </tr>
+                    </thead>
+                    <tbody id="likelihood-rows">
+                        <!-- Evidence rows will be rendered here -->
+                    </tbody>
+                </table>
+            </div>
+
+            <div id="jeffrey" class="tab-content">
+                <h3>Evidence - Jeffrey</h3>
+                <table class="table">
+                    <thead>
+                        <tr>
+                            <th>Category</th>
+                            <th>Value</th>
+                        </tr>
+                    </thead>
+                    <tbody id="jeffrey-rows">
+                        <!-- Jeffrey evidence rows will be rendered here -->
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+
+    <script src="js/algorithms.js"></script>
+    <script src="js/charts.js"></script>
+    <script src="js/storage.js"></script>
+    <script src="js/app.js"></script>
+    <script>
+        function addTestResult(testName, passed, message) {
+            const resultsDiv = document.getElementById('test-results');
+            const resultDiv = document.createElement('div');
+            resultDiv.className = `test-result ${passed ? 'pass' : 'fail'}`;
+            resultDiv.innerHTML = `<strong>${testName}:</strong> ${passed ? 'PASS' : 'FAIL'} - ${message}`;
+            resultsDiv.appendChild(resultDiv);
+        }
+
+        function clearResults() {
+            document.getElementById('test-results').innerHTML = '';
+        }
+
+        function runZIndexTests() {
+            clearResults();
+            console.log('Running Z-Index layering tests...');
+
+            // Wait for app initialization
+            setTimeout(() => {
+                testHeaderZIndex();
+                testH1RowVisibility();
+                testElementLayering();
+                testInteractivity();
+            }, 500);
+        }
+
+        function testHeaderZIndex() {
+            const headers = document.querySelectorAll('.table thead th');
+            let allHeadersCorrect = true;
+            let headerInfo = [];
+
+            headers.forEach((header, index) => {
+                const computedStyle = window.getComputedStyle(header);
+                const zIndex = computedStyle.zIndex;
+                headerInfo.push(`Header ${index + 1}: z-index=${zIndex}`);
+                
+                if (zIndex !== '-1' && zIndex !== 'auto') {
+                    allHeadersCorrect = false;
+                }
+            });
+
+            addTestResult('Table Headers Z-Index', allHeadersCorrect, 
+                `Headers should have z-index: -1. Found: ${headerInfo.join(', ')}`);
+        }
+
+        function testH1RowVisibility() {
+            const hypoRows = document.getElementById('hypo-rows');
+            if (!hypoRows) {
+                addTestResult('H1 Row Visibility', false, 'hypo-rows element not found');
+                return;
+            }
+
+            const rows = hypoRows.children;
+            if (rows.length === 0) {
+                addTestResult('H1 Row Visibility', false, 'No hypothesis rows found');
+                return;
+            }
+
+            // Test first row (should be H1)
+            const firstRow = rows[0];
+            const computedStyle = window.getComputedStyle(firstRow);
+            const isVisible = computedStyle.display !== 'none' && computedStyle.visibility !== 'hidden';
+            const zIndex = computedStyle.zIndex;
+
+            addTestResult('H1 Row Visible', isVisible, 
+                `H1 row display: ${computedStyle.display}, visibility: ${computedStyle.visibility}, z-index: ${zIndex}`);
+
+            // Test if H1 row is above headers
+            const firstRowZIndex = parseInt(zIndex) || 0;
+            const headerZIndex = -1;
+            const isAboveHeaders = firstRowZIndex > headerZIndex;
+
+            addTestResult('H1 Row Above Headers', isAboveHeaders, 
+                `H1 row z-index (${firstRowZIndex}) should be above header z-index (${headerZIndex})`);
+        }
+
+        function testElementLayering() {
+            // Test Setup tab
+            testTabLayering('setup', 'hypo-rows');
+            
+            // Test Evidence tab
+            testTabLayering('evidence', 'likelihood-rows');
+        }
+
+        function testTabLayering(tabId, tbodyId) {
+            const tab = document.getElementById(tabId);
+            const tbody = document.getElementById(tbodyId);
+            
+            if (!tab || !tbody) {
+                addTestResult(`${tabId} Tab Layering`, false, `Tab or tbody not found`);
+                return;
+            }
+
+            const table = tbody.closest('table');
+            const headers = table ? table.querySelectorAll('thead th') : [];
+            const rows = tbody.children;
+
+            if (headers.length === 0 || rows.length === 0) {
+                addTestResult(`${tabId} Tab Layering`, false, `No headers or rows found`);
+                return;
+            }
+
+            // Check if any row is blocked by headers
+            let anyRowBlocked = false;
+            for (let i = 0; i < rows.length; i++) {
+                const row = rows[i];
+                const rowRect = row.getBoundingClientRect();
+                
+                for (let j = 0; j < headers.length; j++) {
+                    const header = headers[j];
+                    const headerRect = header.getBoundingClientRect();
+                    
+                    // Check if header overlaps with row
+                    const overlaps = !(rowRect.right < headerRect.left || 
+                                    rowRect.left > headerRect.right || 
+                                    rowRect.bottom < headerRect.top || 
+                                    rowRect.top > headerRect.bottom);
+                    
+                    if (overlaps) {
+                        const headerZ = parseInt(window.getComputedStyle(header).zIndex) || 0;
+                        const rowZ = parseInt(window.getComputedStyle(row).zIndex) || 0;
+                        
+                        if (headerZ >= rowZ) {
+                            anyRowBlocked = true;
+                            break;
+                        }
+                    }
+                }
+                if (anyRowBlocked) break;
+            }
+
+            addTestResult(`${tabId} Tab No Blocking`, !anyRowBlocked, 
+                anyRowBlocked ? 'Headers are blocking rows' : 'No blocking detected');
+        }
+
+        function testInteractivity() {
+            const hypoRows = document.getElementById('hypo-rows');
+            if (!hypoRows || hypoRows.children.length === 0) {
+                addTestResult('H1 Interactivity', false, 'No hypothesis rows to test');
+                return;
+            }
+
+            const firstRow = hypoRows.children[0];
+            const inputs = firstRow.querySelectorAll('input');
+            const buttons = firstRow.querySelectorAll('button');
+
+            let interactiveElements = inputs.length + buttons.length;
+            let accessibleElements = 0;
+
+            // Test if elements are clickable/focusable
+            inputs.forEach(input => {
+                if (!input.disabled && window.getComputedStyle(input).pointerEvents !== 'none') {
+                    accessibleElements++;
+                }
+            });
+
+            buttons.forEach(button => {
+                if (!button.disabled && window.getComputedStyle(button).pointerEvents !== 'none') {
+                    accessibleElements++;
+                }
+            });
+
+            const fullyInteractive = accessibleElements === interactiveElements;
+            addTestResult('H1 Elements Interactive', fullyInteractive, 
+                `${accessibleElements}/${interactiveElements} elements are interactive`);
+        }
+
+        function highlightH1Elements() {
+            clearHighlights();
+            
+            // Highlight H1 row in Setup tab
+            const hypoRows = document.getElementById('hypo-rows');
+            if (hypoRows && hypoRows.children.length > 0) {
+                hypoRows.children[0].classList.add('highlight-h1');
+            }
+
+            // Highlight H1 row in Evidence tab
+            const likelihoodRows = document.getElementById('likelihood-rows');
+            if (likelihoodRows && likelihoodRows.children.length > 0) {
+                likelihoodRows.children[0].classList.add('highlight-h1');
+            }
+
+            // Highlight H1-related elements in Jeffrey tab
+            const jeffreyRows = document.getElementById('jeffrey-rows');
+            if (jeffreyRows && jeffreyRows.children.length > 0) {
+                jeffreyRows.children[0].classList.add('highlight-h1');
+            }
+        }
+
+        function clearHighlights() {
+            document.querySelectorAll('.highlight-h1').forEach(el => {
+                el.classList.remove('highlight-h1');
+            });
+        }
+
+        function inspectLayering() {
+            console.log('=== Element Layering Inspection ===');
+            
+            const tables = document.querySelectorAll('.table');
+            tables.forEach((table, tableIndex) => {
+                console.log(`\nTable ${tableIndex + 1}:`);
+                
+                const headers = table.querySelectorAll('thead th');
+                headers.forEach((header, headerIndex) => {
+                    const style = window.getComputedStyle(header);
+                    console.log(`  Header ${headerIndex + 1}: z-index=${style.zIndex}, position=${style.position}`);
+                });
+                
+                const tbody = table.querySelector('tbody');
+                if (tbody) {
+                    const rows = tbody.children;
+                    for (let i = 0; i < Math.min(rows.length, 3); i++) {
+                        const row = rows[i];
+                        const style = window.getComputedStyle(row);
+                        console.log(`  Row ${i + 1}: z-index=${style.zIndex}, position=${style.position}, display=${style.display}`);
+                    }
+                }
+            });
+        }
+
+        // Tab functionality
+        document.addEventListener('DOMContentLoaded', function() {
+            const tabBtns = document.querySelectorAll('.tab-btn');
+            const tabContents = document.querySelectorAll('.tab-content');
+
+            tabBtns.forEach(btn => {
+                btn.addEventListener('click', () => {
+                    const targetTab = btn.dataset.tab;
+                    
+                    tabBtns.forEach(b => b.classList.remove('active'));
+                    tabContents.forEach(c => c.classList.remove('active'));
+                    
+                    btn.classList.add('active');
+                    document.getElementById(targetTab).classList.add('active');
+                });
+            });
+
+            // Initialize app
+            setTimeout(() => {
+                console.log('App initialized, ready for z-index testing');
+            }, 1000);
+        });
+
+        // Initialize the app
+        App.start();
+    </script>
+</body>
+</html>

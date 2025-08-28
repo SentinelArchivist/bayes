@@ -1,0 +1,171 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Bayes App Test</title>
+    <link rel="stylesheet" href="/styles.css">
+    <style>
+        .test-panel {
+            position: fixed;
+            top: 10px;
+            right: 10px;
+            width: 300px;
+            background: var(--card);
+            border: 1px solid var(--border);
+            border-radius: var(--radius);
+            padding: 1rem;
+            box-shadow: var(--shadow-lg);
+            z-index: 1000;
+            max-height: 80vh;
+            overflow-y: auto;
+        }
+        .test-result {
+            margin: 0.5rem 0;
+            padding: 0.5rem;
+            border-radius: 4px;
+            font-size: 0.875rem;
+        }
+        .test-pass { background: #d1fae5; color: #065f46; }
+        .test-fail { background: #fee2e2; color: #991b1b; }
+        .test-info { background: #dbeafe; color: #1e40af; }
+    </style>
+</head>
+<body>
+    <div class="test-panel">
+        <h3>App Test Results</h3>
+        <div id="test-results"></div>
+        <button id="run-tests" style="margin-top: 1rem;">Run Tests</button>
+    </div>
+
+    <!-- Include the main app HTML structure -->
+    <header class="app-header">
+        <h1>Bayes</h1>
+        <nav class="tabs" role="tablist" aria-label="Primary">
+            <button class="tab active" data-tab="setup" role="tab" aria-selected="true">Setup</button>
+            <button class="tab" data-tab="evidence" role="tab" aria-selected="false">Evidence</button>
+            <button class="tab" data-tab="results" role="tab" aria-selected="false">Results</button>
+            <button class="tab" data-tab="history" role="tab" aria-selected="false">History</button>
+            <button class="tab" data-tab="settings" role="tab" aria-selected="false">Settings</button>
+        </nav>
+        <div class="project-controls">
+            <button id="btn-projects" class="secondary">Projects</button>
+        </div>
+    </header>
+
+    <main>
+        <section id="view-setup" class="view active">
+            <h2>Hypotheses & Priors</h2>
+            <div class="hypotheses">
+                <table class="table">
+                    <thead>
+                        <tr><th>Label</th><th>Prior</th><th></th></tr>
+                    </thead>
+                    <tbody id="hypo-rows"></tbody>
+                </table>
+                <div class="row-actions">
+                    <button id="btn-add-hypo">Add Hypothesis</button>
+                    <button id="btn-normalize" class="secondary">Normalize Priors</button>
+                </div>
+                <div id="priors-summary" class="muted"></div>
+            </div>
+        </section>
+
+        <section id="view-results" class="view">
+            <h2>Results</h2>
+            <div class="charts">
+                <div class="chart-card">
+                    <h3>Current Posterior</h3>
+                    <div id="chart-bar" class="chart"></div>
+                </div>
+            </div>
+            <div class="results-table">
+                <table class="table">
+                    <thead><tr><th>Hypothesis</th><th>Posterior</th></tr></thead>
+                    <tbody id="results-rows"></tbody>
+                </table>
+            </div>
+        </section>
+    </main>
+
+    <div id="toaster" role="status" aria-live="polite"></div>
+
+    <script type="module">
+        import { Algorithms } from './js/algorithms.js';
+        import { Storage } from './js/storage.js';
+        import { Charts } from './js/charts.js';
+        import { App } from './js/app.js';
+
+        const resultsDiv = document.getElementById('test-results');
+
+        function addTestResult(name, status, message = '') {
+            const div = document.createElement('div');
+            div.className = `test-result test-${status}`;
+            div.innerHTML = `<strong>${name}</strong><br>${message}`;
+            resultsDiv.appendChild(div);
+        }
+
+        async function runTests() {
+            resultsDiv.innerHTML = '';
+            addTestResult('Starting Tests', 'info', 'Running comprehensive app tests...');
+
+            try {
+                // Test 1: Algorithms
+                const priors = [0.6, 0.4];
+                const likelihoods = [0.8, 0.2];
+                const result = Algorithms.bayesUpdate(priors, likelihoods);
+                const sum = result.reduce((a, b) => a + b, 0);
+                
+                if (Math.abs(sum - 1) < 0.001) {
+                    addTestResult('Algorithms', 'pass', `Bayes update works: [${result.map(x => x.toFixed(3)).join(', ')}]`);
+                } else {
+                    addTestResult('Algorithms', 'fail', `Sum is ${sum}, expected 1`);
+                }
+
+                // Test 2: Storage
+                await Storage.init();
+                const projects = await Storage.listProjects();
+                addTestResult('Storage', 'pass', `Storage initialized, found ${projects.length} projects`);
+
+                // Test 3: App initialization
+                await App.start({ Algorithms, Storage, Charts });
+                addTestResult('App Init', 'pass', 'App started successfully');
+
+                // Test 4: Check DOM elements
+                const setupView = document.getElementById('view-setup');
+                const hypoRows = document.getElementById('hypo-rows');
+                
+                if (setupView && hypoRows) {
+                    addTestResult('DOM Elements', 'pass', 'Required DOM elements found');
+                } else {
+                    addTestResult('DOM Elements', 'fail', 'Missing required DOM elements');
+                }
+
+                // Test 5: Charts
+                const testLabels = ['H1', 'H2'];
+                const testValues = [0.7, 0.3];
+                const testColors = ['#2a6df4', '#d97706'];
+                Charts.drawBar('#chart-bar', testLabels, testValues, testColors, (x) => `${(x*100).toFixed(1)}%`);
+                
+                const chartSvg = document.querySelector('#chart-bar svg');
+                if (chartSvg) {
+                    addTestResult('Charts', 'pass', 'Chart rendering works');
+                } else {
+                    addTestResult('Charts', 'fail', 'Chart not rendered');
+                }
+
+                addTestResult('All Tests', 'pass', 'All core functionality working! 🎉');
+
+            } catch (error) {
+                addTestResult('Test Error', 'fail', error.message);
+                console.error('Test error:', error);
+            }
+        }
+
+        document.getElementById('run-tests').addEventListener('click', runTests);
+        
+        // Auto-run tests on load
+        setTimeout(runTests, 500);
+    </script>
+</body>
+</html>

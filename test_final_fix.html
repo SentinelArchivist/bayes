@@ -1,0 +1,253 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Final Fix Verification</title>
+    <link rel="stylesheet" href="/styles.css">
+    <style>
+        .verification-panel {
+            position: fixed;
+            top: 10px;
+            right: 10px;
+            width: 350px;
+            background: white;
+            border: 2px solid #28a745;
+            border-radius: 8px;
+            padding: 1rem;
+            box-shadow: 0 4px 12px rgba(0,0,0,0.15);
+            z-index: 9999;
+            max-height: 85vh;
+            overflow-y: auto;
+        }
+        .check-item {
+            display: flex;
+            align-items: center;
+            margin: 0.5rem 0;
+            padding: 0.5rem;
+            background: #f8f9fa;
+            border-radius: 4px;
+        }
+        .check-pass { border-left: 4px solid #28a745; }
+        .check-fail { border-left: 4px solid #dc3545; }
+        .check-icon { margin-right: 0.5rem; font-weight: bold; }
+        .hypothesis-details {
+            font-size: 0.85em;
+            color: #6c757d;
+            margin-top: 0.25rem;
+        }
+    </style>
+</head>
+<body>
+    <div class="verification-panel">
+        <h4>🔍 H1 Visibility Verification</h4>
+        <div id="verification-results">Checking...</div>
+        <button id="recheck" style="margin-top: 1rem; width: 100%;">Recheck</button>
+    </div>
+
+    <!-- Full Bayes App -->
+    <header class="app-header">
+        <h1>Bayes</h1>
+        <nav class="tabs" role="tablist" aria-label="Primary">
+            <button class="tab active" data-tab="setup" role="tab" aria-selected="true">Setup</button>
+            <button class="tab" data-tab="evidence" role="tab" aria-selected="false">Evidence</button>
+            <button class="tab" data-tab="results" role="tab" aria-selected="false">Results</button>
+            <button class="tab" data-tab="history" role="tab" aria-selected="false">History</button>
+            <button class="tab" data-tab="settings" role="tab" aria-selected="false">Settings</button>
+        </nav>
+        <div class="project-controls">
+            <button id="btn-projects" class="secondary">Projects</button>
+            <div class="dropdown">
+                <button class="secondary">Export ▼</button>
+            </div>
+            <button class="secondary">Import JSON</button>
+        </div>
+    </header>
+
+    <main>
+        <section id="view-setup" class="view active" aria-labelledby="tab-setup">
+            <div class="section-header">
+                <h2>Hypotheses & Priors</h2>
+                <button class="help-btn" data-help="setup" title="Show help for this section">?</button>
+            </div>
+            <p class="help">Add your hypotheses and your initial chances (priors). You can type decimals (0.4), percentages (40%), fractions (1/3), or scientific notation (1e-6).</p>
+            <div class="hypotheses">
+                <table class="table">
+                    <thead>
+                        <tr><th>Label</th><th>Prior</th><th></th></tr>
+                    </thead>
+                    <tbody id="hypo-rows"></tbody>
+                </table>
+                <div class="row-actions">
+                    <button id="btn-add-hypo">Add Hypothesis</button>
+                    <button id="btn-normalize" class="secondary">Normalize Priors</button>
+                </div>
+                <div id="priors-summary" class="muted"></div>
+            </div>
+        </section>
+
+        <section id="view-results" class="view">
+            <div class="section-header">
+                <h2>Results</h2>
+            </div>
+            <div class="charts">
+                <div class="chart-card">
+                    <h3>Current Posterior</h3>
+                    <div id="chart-bar" class="chart"></div>
+                </div>
+            </div>
+            <div class="results-table">
+                <table class="table">
+                    <thead><tr><th>Hypothesis</th><th>Posterior</th></tr></thead>
+                    <tbody id="results-rows"></tbody>
+                </table>
+            </div>
+        </section>
+    </main>
+
+    <div id="toaster" role="status" aria-live="polite"></div>
+
+    <script type="module">
+        import { Algorithms } from './js/algorithms.js';
+        import { Storage } from './js/storage.js';
+        import { Charts } from './js/charts.js';
+        import { App } from './js/app.js';
+
+        const resultsDiv = document.getElementById('verification-results');
+        const recheckBtn = document.getElementById('recheck');
+
+        function addCheck(passed, message, details = '') {
+            const div = document.createElement('div');
+            div.className = `check-item ${passed ? 'check-pass' : 'check-fail'}`;
+            div.innerHTML = `
+                <span class="check-icon">${passed ? '✅' : '❌'}</span>
+                <div>
+                    <div>${message}</div>
+                    ${details ? `<div class="hypothesis-details">${details}</div>` : ''}
+                </div>
+            `;
+            resultsDiv.appendChild(div);
+        }
+
+        async function runVerification() {
+            resultsDiv.innerHTML = '';
+            
+            try {
+                // Initialize app
+                await App.start({ Algorithms, Storage, Charts });
+                
+                // Wait for rendering
+                await new Promise(resolve => setTimeout(resolve, 1000));
+                
+                // Check 1: Hypothesis table rows
+                const hypoRows = document.getElementById('hypo-rows');
+                const tableRows = hypoRows ? hypoRows.querySelectorAll('tr') : [];
+                
+                addCheck(
+                    tableRows.length >= 2,
+                    `Hypothesis table has ${tableRows.length} rows`,
+                    tableRows.length >= 2 ? 'Expected ≥2 rows for H1 and H2' : 'Missing hypothesis rows'
+                );
+                
+                // Check 2: Look for H1 specifically
+                const allInputs = document.querySelectorAll('#hypo-rows input[type="text"]');
+                const labelInputs = Array.from(allInputs).filter((_, i) => i % 2 === 0);
+                const priorInputs = Array.from(allInputs).filter((_, i) => i % 2 === 1);
+                
+                let foundH1 = false;
+                let foundH2 = false;
+                let h1Prior = '';
+                let h2Prior = '';
+                
+                labelInputs.forEach((input, i) => {
+                    if (input.value === 'H1') {
+                        foundH1 = true;
+                        h1Prior = priorInputs[i]?.value || 'N/A';
+                    }
+                    if (input.value === 'H2') {
+                        foundH2 = true;
+                        h2Prior = priorInputs[i]?.value || 'N/A';
+                    }
+                });
+                
+                addCheck(
+                    foundH1,
+                    'H1 hypothesis is visible',
+                    foundH1 ? `H1 prior: ${h1Prior}` : 'H1 label not found in table'
+                );
+                
+                addCheck(
+                    foundH2,
+                    'H2 hypothesis is visible',
+                    foundH2 ? `H2 prior: ${h2Prior}` : 'H2 label not found in table'
+                );
+                
+                // Check 3: Results table
+                const resultsRows = document.getElementById('results-rows');
+                const resultTableRows = resultsRows ? resultsRows.querySelectorAll('tr') : [];
+                
+                addCheck(
+                    resultTableRows.length >= 2,
+                    `Results table has ${resultTableRows.length} rows`,
+                    'Should show both H1 and H2 posteriors'
+                );
+                
+                // Check 4: Action buttons
+                const actionButtons = document.querySelectorAll('#hypo-rows button');
+                addCheck(
+                    actionButtons.length >= 6,
+                    `Found ${actionButtons.length} action buttons`,
+                    'Should have 3 buttons per hypothesis (up, down, delete)'
+                );
+                
+                // Check 5: Functional test - try adding hypothesis
+                const addBtn = document.getElementById('btn-add-hypo');
+                if (addBtn) {
+                    const initialCount = tableRows.length;
+                    addBtn.click();
+                    
+                    await new Promise(resolve => setTimeout(resolve, 500));
+                    
+                    const newCount = document.querySelectorAll('#hypo-rows tr').length;
+                    addCheck(
+                        newCount > initialCount,
+                        'Add hypothesis button works',
+                        `Rows: ${initialCount} → ${newCount}`
+                    );
+                }
+                
+                // Final assessment
+                const allPassed = foundH1 && foundH2 && tableRows.length >= 2;
+                
+                const summaryDiv = document.createElement('div');
+                summaryDiv.style.marginTop = '1rem';
+                summaryDiv.style.padding = '1rem';
+                summaryDiv.style.borderRadius = '4px';
+                summaryDiv.style.fontWeight = 'bold';
+                summaryDiv.style.textAlign = 'center';
+                
+                if (allPassed) {
+                    summaryDiv.style.background = '#d4edda';
+                    summaryDiv.style.color = '#155724';
+                    summaryDiv.innerHTML = '🎉 H1 VISIBILITY ISSUE FIXED!';
+                } else {
+                    summaryDiv.style.background = '#f8d7da';
+                    summaryDiv.style.color = '#721c24';
+                    summaryDiv.innerHTML = '❌ Issue still persists';
+                }
+                
+                resultsDiv.appendChild(summaryDiv);
+                
+            } catch (error) {
+                addCheck(false, `Error during verification: ${error.message}`);
+                console.error('Verification error:', error);
+            }
+        }
+
+        recheckBtn.addEventListener('click', runVerification);
+        
+        // Auto-run verification
+        setTimeout(runVerification, 1500);
+    </script>
+</body>
+</html>

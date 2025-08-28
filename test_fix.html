@@ -1,0 +1,220 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Test Hypothesis Fix</title>
+    <link rel="stylesheet" href="/styles.css">
+    <style>
+        .test-results {
+            position: fixed;
+            top: 10px;
+            right: 10px;
+            width: 300px;
+            background: white;
+            border: 2px solid #007bff;
+            border-radius: 8px;
+            padding: 1rem;
+            box-shadow: 0 4px 8px rgba(0,0,0,0.1);
+            z-index: 9999;
+            max-height: 80vh;
+            overflow-y: auto;
+        }
+        .test-pass { color: #28a745; }
+        .test-fail { color: #dc3545; }
+        .test-info { color: #007bff; }
+    </style>
+</head>
+<body>
+    <div class="test-results">
+        <h4>Hypothesis Fix Test</h4>
+        <div id="test-output">Running tests...</div>
+        <button id="rerun-test" style="margin-top: 0.5rem;">Rerun Test</button>
+    </div>
+
+    <!-- Full app structure -->
+    <header class="app-header">
+        <h1>Bayes</h1>
+        <nav class="tabs" role="tablist" aria-label="Primary">
+            <button class="tab active" data-tab="setup" role="tab" aria-selected="true">Setup</button>
+            <button class="tab" data-tab="evidence" role="tab" aria-selected="false">Evidence</button>
+            <button class="tab" data-tab="results" role="tab" aria-selected="false">Results</button>
+            <button class="tab" data-tab="history" role="tab" aria-selected="false">History</button>
+            <button class="tab" data-tab="settings" role="tab" aria-selected="false">Settings</button>
+        </nav>
+        <div class="project-controls">
+            <button id="btn-projects" class="secondary">Projects</button>
+        </div>
+    </header>
+
+    <main>
+        <section id="view-setup" class="view active" aria-labelledby="tab-setup">
+            <div class="section-header">
+                <h2>Hypotheses & Priors</h2>
+                <button class="help-btn" data-help="setup" title="Show help for this section">?</button>
+            </div>
+            <p class="help">Add your hypotheses and your initial chances (priors).</p>
+            <div class="hypotheses">
+                <table class="table">
+                    <thead>
+                        <tr><th>Label</th><th>Prior</th><th></th></tr>
+                    </thead>
+                    <tbody id="hypo-rows"></tbody>
+                </table>
+                <div class="row-actions">
+                    <button id="btn-add-hypo">Add Hypothesis</button>
+                    <button id="btn-normalize" class="secondary">Normalize Priors</button>
+                </div>
+                <div id="priors-summary" class="muted"></div>
+            </div>
+        </section>
+
+        <section id="view-results" class="view">
+            <div class="section-header">
+                <h2>Results</h2>
+            </div>
+            <div class="charts">
+                <div class="chart-card">
+                    <h3>Current Posterior</h3>
+                    <div id="chart-bar" class="chart"></div>
+                </div>
+            </div>
+            <div class="results-table">
+                <table class="table">
+                    <thead><tr><th>Hypothesis</th><th>Posterior</th></tr></thead>
+                    <tbody id="results-rows"></tbody>
+                </table>
+            </div>
+        </section>
+    </main>
+
+    <div id="toaster" role="status" aria-live="polite"></div>
+
+    <script type="module">
+        import { Algorithms } from './js/algorithms.js';
+        import { Storage } from './js/storage.js';
+        import { Charts } from './js/charts.js';
+        import { App } from './js/app.js';
+
+        const testOutput = document.getElementById('test-output');
+        const rerunBtn = document.getElementById('rerun-test');
+
+        function log(type, message) {
+            const div = document.createElement('div');
+            div.className = `test-${type}`;
+            div.innerHTML = `<strong>[${type.toUpperCase()}]</strong> ${message}`;
+            testOutput.appendChild(div);
+        }
+
+        async function runTests() {
+            testOutput.innerHTML = '';
+            log('info', 'Starting hypothesis fix tests...');
+
+            try {
+                // Clear any existing projects for clean test
+                await Storage.init();
+                const existingProjects = await Storage.listProjects();
+                for (const proj of existingProjects) {
+                    await Storage.deleteProject(proj.id);
+                }
+                log('info', 'Cleared existing projects');
+
+                // Start the app fresh
+                await App.start({ Algorithms, Storage, Charts });
+                log('pass', 'App started successfully');
+
+                // Wait a moment for rendering
+                await new Promise(resolve => setTimeout(resolve, 500));
+
+                // Test 1: Check if hypo-rows has content
+                const hypoRows = document.getElementById('hypo-rows');
+                const rowCount = hypoRows ? hypoRows.querySelectorAll('tr').length : 0;
+                
+                if (rowCount >= 2) {
+                    log('pass', `Found ${rowCount} hypothesis rows in table`);
+                } else {
+                    log('fail', `Only found ${rowCount} hypothesis rows, expected at least 2`);
+                }
+
+                // Test 2: Check if inputs are visible and have values
+                const inputs = document.querySelectorAll('#hypo-rows input');
+                const labelInputs = Array.from(inputs).filter((_, i) => i % 2 === 0);
+                const priorInputs = Array.from(inputs).filter((_, i) => i % 2 === 1);
+
+                log('info', `Found ${labelInputs.length} label inputs, ${priorInputs.length} prior inputs`);
+
+                let allLabelsVisible = true;
+                let allPriorsVisible = true;
+
+                labelInputs.forEach((input, i) => {
+                    if (!input.value || input.value.trim() === '') {
+                        log('fail', `Label input ${i + 1} is empty`);
+                        allLabelsVisible = false;
+                    } else {
+                        log('pass', `Label ${i + 1}: "${input.value}"`);
+                    }
+                });
+
+                priorInputs.forEach((input, i) => {
+                    if (!input.value || input.value.trim() === '') {
+                        log('fail', `Prior input ${i + 1} is empty`);
+                        allPriorsVisible = false;
+                    } else {
+                        log('pass', `Prior ${i + 1}: "${input.value}"`);
+                    }
+                });
+
+                // Test 3: Check if buttons work
+                const addBtn = document.getElementById('btn-add-hypo');
+                if (addBtn) {
+                    const initialRowCount = hypoRows.querySelectorAll('tr').length;
+                    addBtn.click();
+                    
+                    // Wait for update
+                    await new Promise(resolve => setTimeout(resolve, 300));
+                    
+                    const newRowCount = hypoRows.querySelectorAll('tr').length;
+                    if (newRowCount > initialRowCount) {
+                        log('pass', `Add hypothesis button works (${initialRowCount} → ${newRowCount})`);
+                    } else {
+                        log('fail', `Add hypothesis button didn't work (${initialRowCount} → ${newRowCount})`);
+                    }
+                } else {
+                    log('fail', 'Add hypothesis button not found');
+                }
+
+                // Test 4: Check results table
+                const resultsRows = document.getElementById('results-rows');
+                const resultRowCount = resultsRows ? resultsRows.querySelectorAll('tr').length : 0;
+                
+                if (resultRowCount > 0) {
+                    log('pass', `Results table has ${resultRowCount} rows`);
+                } else {
+                    log('fail', 'Results table is empty');
+                }
+
+                // Test 5: Verify all hypotheses are interactive
+                const allButtons = document.querySelectorAll('#hypo-rows button');
+                log('info', `Found ${allButtons.length} action buttons`);
+
+                if (allButtons.length >= 6) { // 3 buttons per hypothesis, 2+ hypotheses
+                    log('pass', 'All hypothesis action buttons are present');
+                } else {
+                    log('fail', `Expected at least 6 action buttons, found ${allButtons.length}`);
+                }
+
+                log('pass', '🎉 All tests completed!');
+
+            } catch (error) {
+                log('fail', `Test failed: ${error.message}`);
+                console.error('Test error:', error);
+            }
+        }
+
+        rerunBtn.addEventListener('click', runTests);
+
+        // Auto-run tests
+        setTimeout(runTests, 1000);
+    </script>
+</body>
+</html>

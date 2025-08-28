@@ -1,0 +1,62 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Bayes Debug Console</title>
+    <style>
+        body { font-family: system-ui; margin: 2rem; }
+        #console { background: #000; color: #0f0; padding: 1rem; border-radius: 8px; height: 400px; overflow-y: auto; font-family: monospace; }
+        .error { color: #f00; }
+        .warn { color: #fa0; }
+        .info { color: #0af; }
+    </style>
+</head>
+<body>
+    <h1>Bayes App Debug Console</h1>
+    <div id="console"></div>
+    
+    <script>
+        const consoleDiv = document.getElementById('console');
+        
+        function log(type, ...args) {
+            const div = document.createElement('div');
+            div.className = type;
+            div.textContent = `[${new Date().toLocaleTimeString()}] ${type.toUpperCase()}: ${args.join(' ')}`;
+            consoleDiv.appendChild(div);
+            consoleDiv.scrollTop = consoleDiv.scrollHeight;
+        }
+        
+        // Override console methods
+        const originalLog = console.log;
+        const originalError = console.error;
+        const originalWarn = console.warn;
+        
+        console.log = (...args) => { originalLog(...args); log('info', ...args); };
+        console.error = (...args) => { originalError(...args); log('error', ...args); };
+        console.warn = (...args) => { originalWarn(...args); log('warn', ...args); };
+        
+        // Catch unhandled errors
+        window.addEventListener('error', (e) => {
+            log('error', 'Unhandled error:', e.message, 'at', e.filename + ':' + e.lineno);
+        });
+        
+        window.addEventListener('unhandledrejection', (e) => {
+            log('error', 'Unhandled promise rejection:', e.reason);
+        });
+        
+        log('info', 'Debug console initialized');
+        
+        // Test the main app
+        setTimeout(() => {
+            log('info', 'Loading main app...');
+            const script = document.createElement('script');
+            script.type = 'module';
+            script.src = '/js/main.js';
+            script.onload = () => log('info', 'Main app script loaded');
+            script.onerror = (e) => log('error', 'Failed to load main app script:', e);
+            document.head.appendChild(script);
+        }, 1000);
+    </script>
+</body>
+</html>

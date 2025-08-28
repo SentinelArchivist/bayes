@@ -1,0 +1,116 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Bayes App Test Runner</title>
+    <style>
+        body { font-family: system-ui; margin: 2rem; }
+        .test { margin: 1rem 0; padding: 1rem; border-radius: 8px; }
+        .pass { background: #d1fae5; border: 1px solid #10b981; }
+        .fail { background: #fee2e2; border: 1px solid #ef4444; }
+        .error { background: #fef3c7; border: 1px solid #f59e0b; }
+        pre { background: #f3f4f6; padding: 1rem; border-radius: 4px; overflow-x: auto; }
+    </style>
+</head>
+<body>
+    <h1>Bayes App Test Runner</h1>
+    <div id="results"></div>
+    
+    <script type="module">
+        import { Algorithms } from '../js/algorithms.js';
+        import { Storage } from '../js/storage.js';
+        
+        const results = document.getElementById('results');
+        
+        function addResult(name, status, message = '', error = null) {
+            const div = document.createElement('div');
+            div.className = `test ${status}`;
+            div.innerHTML = `
+                <h3>${name}: ${status.toUpperCase()}</h3>
+                ${message ? `<p>${message}</p>` : ''}
+                ${error ? `<pre>${error.stack || error}</pre>` : ''}
+            `;
+            results.appendChild(div);
+        }
+        
+        async function runTests() {
+            // Test 1: Algorithms module
+            try {
+                const priors = [0.5, 0.5];
+                const likelihoods = [0.8, 0.2];
+                const result = Algorithms.bayesUpdate(priors, likelihoods);
+                
+                if (Array.isArray(result) && result.length === 2 && Math.abs(result[0] + result[1] - 1) < 0.001) {
+                    addResult('Algorithms.bayesUpdate', 'pass', `Result: [${result[0].toFixed(3)}, ${result[1].toFixed(3)}]`);
+                } else {
+                    addResult('Algorithms.bayesUpdate', 'fail', `Invalid result: ${JSON.stringify(result)}`);
+                }
+            } catch (e) {
+                addResult('Algorithms.bayesUpdate', 'error', 'Exception thrown', e);
+            }
+            
+            // Test 2: Storage module
+            try {
+                await Storage.init();
+                const projects = await Storage.listProjects();
+                addResult('Storage.init and listProjects', 'pass', `Found ${projects.length} projects`);
+            } catch (e) {
+                addResult('Storage.init and listProjects', 'error', 'Exception thrown', e);
+            }
+            
+            // Test 3: Create and load project
+            try {
+                const newProject = await Storage.createProject('Test Project');
+                if (newProject && newProject.id && newProject.name === 'Test Project') {
+                    const loaded = await Storage.loadProject(newProject.id);
+                    if (loaded && loaded.id === newProject.id) {
+                        addResult('Storage create/load project', 'pass', `Created and loaded project: ${newProject.id}`);
+                        // Cleanup
+                        await Storage.deleteProject(newProject.id);
+                    } else {
+                        addResult('Storage create/load project', 'fail', 'Failed to load created project');
+                    }
+                } else {
+                    addResult('Storage create/load project', 'fail', 'Failed to create project');
+                }
+            } catch (e) {
+                addResult('Storage create/load project', 'error', 'Exception thrown', e);
+            }
+            
+            // Test 4: Jeffrey conditionalization
+            try {
+                const current = [0.6, 0.4];
+                const likeMatrix = [[0.8, 0.2], [0.3, 0.7]];
+                const targetWeights = [0.7, 0.3];
+                const result = Algorithms.jeffreyUpdate(current, likeMatrix, targetWeights);
+                
+                if (Array.isArray(result) && result.length === 2 && Math.abs(result[0] + result[1] - 1) < 0.001) {
+                    addResult('Algorithms.jeffreyUpdate', 'pass', `Result: [${result[0].toFixed(3)}, ${result[1].toFixed(3)}]`);
+                } else {
+                    addResult('Algorithms.jeffreyUpdate', 'fail', `Invalid result: ${JSON.stringify(result)}`);
+                }
+            } catch (e) {
+                addResult('Algorithms.jeffreyUpdate', 'error', 'Exception thrown', e);
+            }
+            
+            // Test 5: Normalization
+            try {
+                const unnormalized = [0.3, 0.7, 0.2];
+                const normalized = Algorithms.normalizeProbs(unnormalized);
+                const sum = normalized.reduce((a, b) => a + b, 0);
+                
+                if (Math.abs(sum - 1) < 0.001) {
+                    addResult('Algorithms.normalizeProbs', 'pass', `Normalized: [${normalized.map(x => x.toFixed(3)).join(', ')}]`);
+                } else {
+                    addResult('Algorithms.normalizeProbs', 'fail', `Sum is ${sum}, expected 1`);
+                }
+            } catch (e) {
+                addResult('Algorithms.normalizeProbs', 'error', 'Exception thrown', e);
+            }
+        }
+        
+        runTests();
+    </script>
+</body>
+</html>

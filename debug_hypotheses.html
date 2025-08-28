@@ -1,0 +1,108 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Debug Hypotheses Issue</title>
+    <style>
+        body { font-family: system-ui; margin: 2rem; }
+        .debug-panel { background: #f5f5f5; padding: 1rem; margin: 1rem 0; border-radius: 8px; }
+        .hypothesis { margin: 0.5rem 0; padding: 0.5rem; background: white; border: 1px solid #ddd; }
+        .error { color: red; }
+        .success { color: green; }
+        .info { color: blue; }
+    </style>
+</head>
+<body>
+    <h1>Debug Hypotheses Display Issue</h1>
+    <div id="debug-output"></div>
+    
+    <script type="module">
+        import { Storage } from './js/storage.js';
+        import { App } from './js/app.js';
+        
+        const debugDiv = document.getElementById('debug-output');
+        
+        function log(type, message, data = null) {
+            const div = document.createElement('div');
+            div.className = `debug-panel ${type}`;
+            div.innerHTML = `<strong>[${type.toUpperCase()}]</strong> ${message}`;
+            if (data) {
+                const pre = document.createElement('pre');
+                pre.textContent = JSON.stringify(data, null, 2);
+                div.appendChild(pre);
+            }
+            debugDiv.appendChild(div);
+        }
+        
+        async function debugHypotheses() {
+            try {
+                log('info', 'Initializing storage...');
+                await Storage.init();
+                
+                log('info', 'Listing existing projects...');
+                const projects = await Storage.listProjects();
+                log('info', `Found ${projects.length} existing projects`, projects);
+                
+                log('info', 'Creating new test project...');
+                const newProject = await Storage.createProject('Debug Test Project');
+                log('info', 'New project created', newProject);
+                
+                log('info', 'Checking default hypotheses...');
+                log('info', 'Default hypotheses from new project', newProject.hypotheses);
+                
+                log('info', 'Checking timeline...');
+                log('info', 'Timeline from new project', newProject.timeline);
+                
+                // Check if there's an existing project being loaded
+                if (projects.length > 0) {
+                    log('info', 'Loading most recent project...');
+                    const recentProject = await Storage.loadProject(projects[0].id);
+                    log('info', 'Recent project loaded', recentProject);
+                    
+                    if (recentProject.hypotheses) {
+                        log('info', 'Recent project hypotheses', recentProject.hypotheses);
+                    }
+                }
+                
+                // Test the DOM rendering
+                log('info', 'Testing DOM elements...');
+                const hypoRows = document.getElementById('hypo-rows');
+                log('info', 'hypo-rows element found:', !!hypoRows);
+                
+                if (hypoRows) {
+                    log('info', 'Current hypo-rows content:', hypoRows.innerHTML);
+                }
+                
+                // Cleanup test project
+                await Storage.deleteProject(newProject.id);
+                log('success', 'Test project cleaned up');
+                
+            } catch (error) {
+                log('error', 'Debug failed', error);
+            }
+        }
+        
+        // Add a simple table to test rendering
+        const testTable = document.createElement('div');
+        testTable.innerHTML = `
+            <h2>Test Hypotheses Table</h2>
+            <table style="border-collapse: collapse; width: 100%;">
+                <thead>
+                    <tr style="background: #f0f0f0;">
+                        <th style="border: 1px solid #ddd; padding: 8px;">Label</th>
+                        <th style="border: 1px solid #ddd; padding: 8px;">Prior</th>
+                        <th style="border: 1px solid #ddd; padding: 8px;">Actions</th>
+                    </tr>
+                </thead>
+                <tbody id="hypo-rows" style="border: 1px solid #ddd;">
+                    <!-- Hypotheses will be rendered here -->
+                </tbody>
+            </table>
+        `;
+        document.body.appendChild(testTable);
+        
+        debugHypotheses();
+    </script>
+</body>
+</html>

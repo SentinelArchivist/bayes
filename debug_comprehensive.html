@@ -1,0 +1,252 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Comprehensive H1 Debug Test</title>
+    <style>
+        body { font-family: Arial, sans-serif; margin: 20px; }
+        .debug-section { margin: 20px 0; padding: 15px; border: 1px solid #ddd; background: #f9f9f9; }
+        .error { color: red; font-weight: bold; }
+        .success { color: green; font-weight: bold; }
+        .warning { color: orange; font-weight: bold; }
+        pre { background: #eee; padding: 10px; overflow-x: auto; }
+        table { border-collapse: collapse; width: 100%; margin: 10px 0; }
+        th, td { border: 1px solid #ddd; padding: 8px; text-align: left; }
+        th { background-color: #f2f2f2; }
+        #hypo-rows tr { background: #fff; }
+        #hypo-rows tr:nth-child(even) { background: #f9f9f9; }
+        .test-table { margin: 20px 0; }
+    </style>
+</head>
+<body>
+    <h1>Comprehensive H1 Hypothesis Debug Test</h1>
+    
+    <div class="debug-section">
+        <h2>Test Environment</h2>
+        <div id="test-info">Loading...</div>
+    </div>
+
+    <div class="debug-section">
+        <h2>Project Data Analysis</h2>
+        <div id="project-analysis">Loading...</div>
+    </div>
+
+    <div class="debug-section">
+        <h2>DOM Structure Analysis</h2>
+        <div id="dom-analysis">Loading...</div>
+    </div>
+
+    <div class="debug-section">
+        <h2>Hypothesis Table (Live)</h2>
+        <table class="test-table">
+            <thead>
+                <tr><th>Label</th><th>Prior</th><th>Actions</th></tr>
+            </thead>
+            <tbody id="hypo-rows"></tbody>
+        </table>
+        <div id="table-analysis">Loading...</div>
+    </div>
+
+    <div class="debug-section">
+        <h2>Rendering Process Debug</h2>
+        <div id="render-debug">Loading...</div>
+    </div>
+
+    <div class="debug-section">
+        <h2>Console Logs</h2>
+        <pre id="console-logs"></pre>
+    </div>
+
+    <script src="js/main.js"></script>
+    <script src="js/algorithms.js"></script>
+    <script src="js/charts.js"></script>
+    <script src="js/app.js"></script>
+
+    <script>
+        let consoleLogs = [];
+        const originalConsole = {
+            log: console.log,
+            error: console.error,
+            warn: console.warn,
+            info: console.info
+        };
+
+        // Capture console output
+        ['log', 'error', 'warn', 'info'].forEach(method => {
+            console[method] = function(...args) {
+                consoleLogs.push(`[${method.toUpperCase()}] ${args.join(' ')}`);
+                originalConsole[method].apply(console, args);
+                updateConsoleLogs();
+            };
+        });
+
+        function updateConsoleLogs() {
+            document.getElementById('console-logs').textContent = consoleLogs.slice(-20).join('\n');
+        }
+
+        function analyzeProject() {
+            const analysis = document.getElementById('project-analysis');
+            
+            if (!window.project) {
+                analysis.innerHTML = '<span class="error">❌ No project object found</span>';
+                return;
+            }
+
+            const projectInfo = {
+                id: window.project.id,
+                name: window.project.name,
+                hypothesesCount: window.project.hypotheses ? window.project.hypotheses.length : 0,
+                hypotheses: window.project.hypotheses || [],
+                timeline: window.project.timeline || [],
+                timelineLength: window.project.timeline ? window.project.timeline.length : 0
+            };
+
+            let html = '<h3>Project Object:</h3><pre>' + JSON.stringify(projectInfo, null, 2) + '</pre>';
+            
+            if (projectInfo.hypotheses.length === 0) {
+                html += '<span class="error">❌ No hypotheses found in project</span>';
+            } else {
+                html += '<h3>Hypothesis Details:</h3>';
+                projectInfo.hypotheses.forEach((h, i) => {
+                    const status = h.label === 'H1' ? 'success' : 'info';
+                    html += `<div class="${status}">Hypothesis ${i}: ${JSON.stringify(h)}</div>`;
+                });
+            }
+
+            analysis.innerHTML = html;
+        }
+
+        function analyzeDOMStructure() {
+            const analysis = document.getElementById('dom-analysis');
+            const hypoRows = document.getElementById('hypo-rows');
+            
+            let html = '<h3>DOM Elements:</h3>';
+            html += `<div>hypo-rows element: ${hypoRows ? '✅ Found' : '❌ Missing'}</div>`;
+            
+            if (hypoRows) {
+                const rows = hypoRows.querySelectorAll('tr');
+                const inputs = hypoRows.querySelectorAll('input');
+                const buttons = hypoRows.querySelectorAll('button');
+                
+                html += `<div>Table rows: ${rows.length}</div>`;
+                html += `<div>Input elements: ${inputs.length}</div>`;
+                html += `<div>Button elements: ${buttons.length}</div>`;
+                html += `<div>innerHTML length: ${hypoRows.innerHTML.length}</div>`;
+                
+                if (hypoRows.innerHTML.length > 0) {
+                    html += '<h4>Current HTML Content:</h4>';
+                    html += '<pre>' + hypoRows.innerHTML.replace(/</g, '&lt;').replace(/>/g, '&gt;') + '</pre>';
+                }
+                
+                // Analyze each row
+                if (rows.length > 0) {
+                    html += '<h4>Row Analysis:</h4>';
+                    rows.forEach((row, i) => {
+                        const rowInputs = row.querySelectorAll('input');
+                        const rowButtons = row.querySelectorAll('button');
+                        const hypothesisId = row.getAttribute('data-hypothesis-id');
+                        
+                        html += `<div>Row ${i}: ID="${hypothesisId}", Inputs=${rowInputs.length}, Buttons=${rowButtons.length}</div>`;
+                        
+                        if (rowInputs.length >= 2) {
+                            html += `<div>  - Label: "${rowInputs[0].value}", Prior: "${rowInputs[1].value}"</div>`;
+                        }
+                    });
+                }
+            }
+            
+            analysis.innerHTML = html;
+        }
+
+        function analyzeTable() {
+            const analysis = document.getElementById('table-analysis');
+            const hypoRows = document.getElementById('hypo-rows');
+            
+            if (!hypoRows) {
+                analysis.innerHTML = '<span class="error">❌ Table body not found</span>';
+                return;
+            }
+
+            const rows = hypoRows.querySelectorAll('tr');
+            let html = `<div>Visible rows in table: ${rows.length}</div>`;
+            
+            if (rows.length === 0) {
+                html += '<span class="error">❌ No rows visible in table</span>';
+            } else {
+                html += '<div class="success">✅ Rows found in table</div>';
+                
+                // Check for H1 specifically
+                let h1Found = false;
+                rows.forEach((row, i) => {
+                    const inputs = row.querySelectorAll('input');
+                    if (inputs.length >= 1 && inputs[0].value === 'H1') {
+                        h1Found = true;
+                        html += `<div class="success">✅ H1 found in row ${i}</div>`;
+                    }
+                });
+                
+                if (!h1Found) {
+                    html += '<span class="error">❌ H1 not found in any visible row</span>';
+                }
+            }
+            
+            analysis.innerHTML = html;
+        }
+
+        function debugRenderProcess() {
+            const debug = document.getElementById('render-debug');
+            
+            let html = '<h3>Manual Render Test:</h3>';
+            
+            // Test manual rendering
+            try {
+                if (window.renderSetup) {
+                    html += '<div>Calling renderSetup()...</div>';
+                    window.renderSetup();
+                    html += '<div class="success">✅ renderSetup() called successfully</div>';
+                } else {
+                    html += '<div class="error">❌ renderSetup function not found</div>';
+                }
+            } catch (error) {
+                html += `<div class="error">❌ Error calling renderSetup(): ${error.message}</div>`;
+            }
+            
+            debug.innerHTML = html;
+        }
+
+        async function runComprehensiveTest() {
+            document.getElementById('test-info').innerHTML = `
+                <div>Timestamp: ${new Date().toISOString()}</div>
+                <div>User Agent: ${navigator.userAgent}</div>
+                <div>URL: ${window.location.href}</div>
+            `;
+
+            // Wait for app initialization
+            await new Promise(resolve => setTimeout(resolve, 1000));
+            
+            analyzeProject();
+            analyzeDOMStructure();
+            analyzeTable();
+            debugRenderProcess();
+            
+            // Re-analyze after render
+            setTimeout(() => {
+                analyzeDOMStructure();
+                analyzeTable();
+            }, 500);
+        }
+
+        // Start the test when page loads
+        window.addEventListener('load', () => {
+            setTimeout(runComprehensiveTest, 100);
+        });
+
+        // Periodic updates
+        setInterval(() => {
+            analyzeTable();
+            analyzeDOMStructure();
+        }, 2000);
+    </script>
+</body>
+</html>

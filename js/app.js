@@ -4,6 +4,15 @@
 export const App = (() => {
   let Algorithms, Storage, Charts;
   let project = null;
+  
+  // Expose project globally for debugging
+  if (typeof window !== 'undefined') {
+    Object.defineProperty(window, 'project', {
+      get: () => project,
+      set: (value) => { project = value; },
+      configurable: true
+    });
+  }
 
   // ---------- Utilities ----------
   function toast(msg, ms = 2500) {
@@ -76,21 +85,10 @@ export const App = (() => {
   }
 
   function recomputeFromStart() {
-    try {
-      const priors = normalizeHypothesisPriors();
-      // Set timeline[0]
-      project.timeline = [priors];
-      ensureRedo(project);
-      // Replay history
-      for (const step of project.history) {
-        stepApplyNoRecord(step);
-      }
-      save();
-      renderAll();
-    } catch (e) {
-      console.error(e);
-      toast('Recompute failed: ' + e.message);
-    }
+    normalizeHypothesisPriors();
+    project.timeline = [project.hypotheses.map(h => h.prior)];
+    project.history.forEach(stepApplyNoRecord);
+    save(); renderAll();
   }
 
   function save() { Storage.saveProject(project).catch(err => console.error(err)); }
@@ -114,29 +112,84 @@ export const App = (() => {
   const debouncedRenderResults = debounce(() => renderResults(), 200);
 
   function renderSetup() {
+    console.log('[RENDER] Starting renderSetup');
     const tbody = document.getElementById('hypo-rows');
+    if (!tbody) {
+      console.error('[RENDER] hypo-rows element not found');
+      return;
+    }
     
-    // Performance: use DocumentFragment for batch DOM updates
-    const fragment = document.createDocumentFragment();
+    if (!project || !Array.isArray(project.hypotheses)) {
+      console.error('[RENDER] No project or hypotheses to render');
+      tbody.innerHTML = '<tr><td colspan="3">No hypotheses available</td></tr>';
+      return;
+    }
+    
+    console.log('[RENDER] Rendering hypotheses:', project.hypotheses.map(h => ({ id: h.id, label: h.label, prior: h.prior })));
     
     // Clear existing content
     tbody.innerHTML = '';
     
-    for (const h of project.hypotheses) {
+    // Render each hypothesis row
+    project.hypotheses.forEach((h, index) => {
+      console.log(`[RENDER] Creating row ${index} for hypothesis:`, { id: h.id, label: h.label, prior: h.prior });
+      
       const tr = document.createElement('tr');
-      tr.innerHTML = `
-        <td><input type="text" value="${h.label}" aria-label="Label"></td>
-        <td><input type="text" value="${fmt(h.prior)}" aria-label="Prior"></td>
-        <td style="text-align:right; display:flex; gap:.25rem; justify-content:flex-end;">
-          <button class="secondary" data-act="up" title="Move up">↑</button>
-          <button class="secondary" data-act="down" title="Move down">↓</button>
-          <button class="secondary" data-act="del">Delete</button>
-        </td>
-      `;
+      tr.setAttribute('data-hypothesis-id', h.id || `h${index + 1}`);
+      tr.style.display = 'table-row'; // Ensure visibility
       
-      const [labelInput, priorInput] = tr.querySelectorAll('input');
+      // Label cell
+      const labelCell = document.createElement('td');
+      const labelInput = document.createElement('input');
+      labelInput.type = 'text';
+      labelInput.value = h.label || `H${index + 1}`;
+      labelInput.setAttribute('aria-label', 'Label');
+      labelInput.style.width = '100%';
+      labelCell.appendChild(labelInput);
       
-      // Debounced input handlers for better performance
+      // Prior cell
+      const priorCell = document.createElement('td');
+      const priorInput = document.createElement('input');
+      priorInput.type = 'text';
+      priorInput.value = fmt(h.prior || 0.5);
+      priorInput.setAttribute('aria-label', 'Prior');
+      priorInput.style.width = '100%';
+      priorCell.appendChild(priorInput);
+      
+      // Action cell
+      const actionCell = document.createElement('td');
+      actionCell.style.textAlign = 'right';
+      actionCell.style.display = 'flex';
+      actionCell.style.gap = '.25rem';
+      actionCell.style.justifyContent = 'flex-end';
+      
+      const upBtn = document.createElement('button');
+      upBtn.className = 'secondary';
+      upBtn.setAttribute('data-act', 'up');
+      upBtn.title = 'Move up';
+      upBtn.textContent = '↑';
+      
+      const downBtn = document.createElement('button');
+      downBtn.className = 'secondary';
+      downBtn.setAttribute('data-act', 'down');
+      downBtn.title = 'Move down';
+      downBtn.textContent = '↓';
+      
+      const delBtn = document.createElement('button');
+      delBtn.className = 'secondary';
+      delBtn.setAttribute('data-act', 'del');
+      delBtn.textContent = 'Delete';
+      
+      actionCell.appendChild(upBtn);
+      actionCell.appendChild(downBtn);
+      actionCell.appendChild(delBtn);
+      
+      // Assemble row
+      tr.appendChild(labelCell);
+      tr.appendChild(priorCell);
+      tr.appendChild(actionCell);
+      
+      // Event handlers
       labelInput.addEventListener('input', debounce(() => { 
         h.label = labelInput.value || h.label; 
         debouncedSave(); 
@@ -157,13 +210,13 @@ export const App = (() => {
         debouncedUpdateSummary(); 
       }, 300));
       
-      tr.querySelector('button[data-act="del"]').addEventListener('click', () => {
+      delBtn.addEventListener('click', () => {
         if (project.hypotheses.length <= 1) { toast('Need at least one hypothesis'); return; }
         project.hypotheses = project.hypotheses.filter(x => x !== h);
         recomputeFromStart();
       });
       
-      tr.querySelector('button[data-act="up"]').addEventListener('click', () => {
+      upBtn.addEventListener('click', () => {
         const idx = project.hypotheses.indexOf(h);
         if (idx > 0) {
           [project.hypotheses[idx-1], project.hypotheses[idx]] = [project.hypotheses[idx], project.hypotheses[idx-1]];
@@ -171,7 +224,7 @@ export const App = (() => {
         }
       });
       
-      tr.querySelector('button[data-act="down"]').addEventListener('click', () => {
+      downBtn.addEventListener('click', () => {
         const idx = project.hypotheses.indexOf(h);
         if (idx < project.hypotheses.length - 1) {
           [project.hypotheses[idx], project.hypotheses[idx+1]] = [project.hypotheses[idx+1], project.hypotheses[idx]];
@@ -179,12 +232,22 @@ export const App = (() => {
         }
       });
       
-      fragment.appendChild(tr);
-    }
+      // Append row to table
+      tbody.appendChild(tr);
+      console.log(`[RENDER] Row ${index} appended successfully for ${h.label}`);
+    });
     
-    // Single DOM update
-    tbody.appendChild(fragment);
+    // Force DOM update
+    tbody.style.display = 'table-row-group';
+    
+    console.log(`[RENDER] Completed rendering ${project.hypotheses.length} hypothesis rows`);
+    console.log(`[RENDER] Table now contains ${tbody.children.length} rows`);
+    
     updatePriorsSummary();
+    
+    // Also update evidence rendering
+    renderEvidenceCertain();
+    renderEvidenceJeffrey();
   }
 
   function updatePriorsSummary() {
@@ -194,11 +257,19 @@ export const App = (() => {
   }
 
   function normalizeHypothesisPriors() {
+    if (!project || !Array.isArray(project.hypotheses) || project.hypotheses.length === 0) {
+      console.warn('No hypotheses to normalize');
+      return [];
+    }
+    
     const priors = project.hypotheses.map(h => clamp01(h.prior ?? 0));
     const sum = priors.reduce((a, b) => a + b, 0);
     const norm = sum > 0 ? priors.map(v => v / sum) : priors.map(() => 1 / priors.length);
-    // write back
-    for (let i = 0; i < project.hypotheses.length; i++) project.hypotheses[i].prior = norm[i];
+    
+    // write back normalized values
+    for (let i = 0; i < project.hypotheses.length; i++) {
+      project.hypotheses[i].prior = norm[i];
+    }
     return norm;
   }
 
@@ -215,15 +286,22 @@ export const App = (() => {
   // ---------- Evidence: Certain ----------
   function renderEvidenceCertain() {
     const tbody = document.getElementById('likelihood-rows');
+    if (!tbody) return;
+    
     tbody.innerHTML = '';
-    for (const h of project.hypotheses) {
+    if (!project || !Array.isArray(project.hypotheses)) return;
+    
+    project.hypotheses.forEach(h => {
       const tr = document.createElement('tr');
-      tr.innerHTML = `<td>${h.label}</td><td><input type="text" value="" aria-label="P(E|${h.label})"></td>`;
+      tr.innerHTML = `<td>${h.label}</td><td><input type="text" value="0.5" aria-label="P(E|${h.label})"></td>`;
       tbody.appendChild(tr);
-    }
+    });
   }
 
   function onApplyEvidenceCertain() {
+    const labelInput = document.getElementById('evidence-certain-label');
+    const evidenceLabel = labelInput ? labelInput.value.trim() || `Evidence ${project.history.length + 1}` : `Evidence ${project.history.length + 1}`;
+    
     const inputs = document.querySelectorAll('#likelihood-rows input');
     const L = Array.from(inputs).map(i => {
       const result = parseProbInput(i.value);
@@ -240,10 +318,11 @@ export const App = (() => {
     try {
       const next = Algorithms.bayesUpdate(currentPost(), L);
       project.timeline.push(next);
-      project.history.push({ type: 'certain', L, at: Date.now() });
+      project.history.push({ type: 'certain', L, label: evidenceLabel, at: Date.now() });
       ensureRedo(project); project.redo = [];
       save();
       document.getElementById('evidence-message').textContent = 'Evidence applied.';
+      if (labelInput) labelInput.value = ''; // Clear the label input
       renderResults(); renderHistory();
     } catch (e) {
       console.error(e); toast('Update failed: ' + e.message);
@@ -371,13 +450,17 @@ export const App = (() => {
       return s>0? vals.map(v=>v/s): vals.map(()=> 1/vals.length);
     });
 
+    const labelInput = document.getElementById('evidence-jeffrey-label');
+    const evidenceLabel = labelInput ? labelInput.value.trim() || `Jeffrey Evidence ${project.history.length + 1}` : `Jeffrey Evidence ${project.history.length + 1}`;
+    
     try {
       const next = Algorithms.jeffreyUpdate(currentPost(), likeMatrix, q);
       project.timeline.push(next);
-      project.history.push({ type: 'jeffrey', cats: catLabels, q, likeMatrix, at: Date.now() });
+      project.history.push({ type: 'jeffrey', cats: catLabels, q, likeMatrix, label: evidenceLabel, at: Date.now() });
       ensureRedo(project); project.redo = [];
       save();
       document.getElementById('evidence-message').textContent = 'Jeffrey evidence applied.';
+      if (labelInput) labelInput.value = ''; // Clear the label input
       renderResults(); renderHistory();
     } catch (e) {
       console.error(e); toast('Jeffrey update failed: ' + e.message);
@@ -410,7 +493,8 @@ export const App = (() => {
       const div = document.createElement('div');
       div.className = 'history-item';
       const title = step.type === 'certain' ? 'Evidence (Certain)' : 'Evidence (Jeffrey)';
-      div.innerHTML = `<strong>#${idx+1}</strong> — ${title} — ${new Date(step.at).toLocaleString()}`;
+      const label = step.label ? ` — ${step.label}` : '';
+      div.innerHTML = `<strong>#${idx+1}</strong> — ${title}${label} — ${new Date(step.at).toLocaleString()}`;
       list.appendChild(div);
     });
     document.getElementById('btn-undo').disabled = project.history.length === 0;
@@ -486,21 +570,122 @@ export const App = (() => {
   }
 
   function migrateProject(p) {
-    p.settings = p.settings || { numberFormat: 'percent', round: 2, theme: 'light' };
-    p.timeline = Array.isArray(p.timeline) && p.timeline.length ? p.timeline : [normalizeHypothesisPriors()];
-    ensureRedo(p);
+    // Ensure project has required structure
+    if (!p) return null;
+    
+    // Ensure hypotheses array exists and has at least 2 items
+    if (!Array.isArray(p.hypotheses)) {
+      p.hypotheses = [
+        { id: 'h1', label: 'H1', prior: 0.5 },
+        { id: 'h2', label: 'H2', prior: 0.5 }
+      ];
+    } else if (p.hypotheses.length < 2) {
+      // Add missing hypotheses
+      while (p.hypotheses.length < 2) {
+        const index = p.hypotheses.length + 1;
+        p.hypotheses.push({
+          id: `h${index}`,
+          label: `H${index}`,
+          prior: 0.5
+        });
+      }
+    }
+    
+    // Ensure each hypothesis has required fields
+    p.hypotheses.forEach((h, i) => {
+      if (!h.id) h.id = `h${i + 1}`;
+      if (!h.label) h.label = `H${i + 1}`;
+      if (typeof h.prior !== 'number' || !isFinite(h.prior)) h.prior = 0.5;
+    });
+    
+    // Ensure other required fields
+    if (!Array.isArray(p.history)) p.history = [];
+    if (!Array.isArray(p.redo)) p.redo = [];
+    if (!p.settings) p.settings = { numberFormat: 'percent', round: 2 };
+    if (!p.settings.numberFormat) p.settings.numberFormat = 'percent';
+    if (typeof p.settings.round !== 'number') p.settings.round = 2;
+    
+    // Normalize priors and set timeline
+    const normalizedPriors = p.hypotheses.map(h => clamp01(h.prior ?? 0));
+    const sum = normalizedPriors.reduce((a, b) => a + b, 0);
+    const norm = sum > 0 ? normalizedPriors.map(v => v / sum) : normalizedPriors.map(() => 1 / normalizedPriors.length);
+    
+    // Update hypothesis priors with normalized values
+    for (let i = 0; i < p.hypotheses.length; i++) {
+      p.hypotheses[i].prior = norm[i];
+    }
+    
+    p.timeline = Array.isArray(p.timeline) && p.timeline.length ? p.timeline : [norm];
+    
     return p;
   }
 
   async function initProject() {
-    // Try load most recent, else create new
-    const projs = await Storage.listProjects();
-    if (projs.length === 0) {
-      project = await Storage.createProject('My Project');
-    } else {
-      project = await Storage.loadProject(projs[0].id);
+    console.log('[INIT] Starting project initialization');
+    
+    try {
+      // Try to load existing projects first
+      const existingProjs = await Storage.listProjects();
+      console.log('[INIT] Found existing projects:', existingProjs.length);
+      
+      if (existingProjs.length > 0) {
+        // Load the most recent project
+        const mostRecent = existingProjs.sort((a, b) => new Date(b.updatedAt) - new Date(a.updatedAt))[0];
+        console.log('[INIT] Loading most recent project:', mostRecent.id);
+        const loaded = await Storage.loadProject(mostRecent.id);
+        if (loaded && loaded.hypotheses && loaded.hypotheses.length >= 2) {
+          project = migrateProject(loaded);
+          console.log('[INIT] Successfully loaded existing project with', project.hypotheses.length, 'hypotheses');
+          return;
+        }
+      }
+      
+      // If no valid project exists, create a fresh one
+      console.log('[INIT] Creating fresh project...');
+      project = {
+        id: 'project_' + Date.now(),
+        name: 'My Project',
+        hypotheses: [
+          { id: 'h1', label: 'H1', prior: 0.5 },
+          { id: 'h2', label: 'H2', prior: 0.5 }
+        ],
+        timeline: [[0.5, 0.5]],
+        history: [],
+        redo: [],
+        settings: { numberFormat: 'percent', round: 2 }
+      };
+      
+      // Save the fresh project
+      await Storage.saveProject(project);
+      console.log('[INIT] Fresh project created and saved');
+      
+    } catch (e) {
+      console.error('[INIT] Error during initialization:', e);
+      // Fallback: create minimal project
+      project = {
+        id: 'fallback_' + Date.now(),
+        name: 'My Project',
+        hypotheses: [
+          { id: 'h1', label: 'H1', prior: 0.5 },
+          { id: 'h2', label: 'H2', prior: 0.5 }
+        ],
+        timeline: [[0.5, 0.5]],
+        history: [],
+        redo: [],
+        settings: { numberFormat: 'percent', round: 2 }
+      };
     }
-    project = migrateProject(project);
+    
+    // Final verification
+    if (!project || !Array.isArray(project.hypotheses) || project.hypotheses.length < 2) {
+      throw new Error('Project initialization failed - invalid hypothesis structure');
+    }
+    
+    console.log('[INIT] Project ready:', {
+      id: project.id,
+      hypothesesCount: project.hypotheses.length,
+      hypotheses: project.hypotheses.map(h => ({ id: h.id, label: h.label, prior: h.prior }))
+    });
   }
 
   // ---------- Export Functions ----------
@@ -884,7 +1069,8 @@ export const App = (() => {
   // ========= Debug Utilities =========
   const DBG_KEY = 'debugTutorial';
   function isDebug() {
-    return typeof location !== 'undefined' && location.hash.includes('debug') || localStorage.getItem(DBG_KEY) === '1';
+    if (typeof location === 'undefined' || typeof localStorage === 'undefined') return false;
+    return location.hash.includes('debug') || localStorage.getItem(DBG_KEY) === '1';
   }
   function ensureDebugPanel() {
     if (!isDebug()) return;
@@ -917,24 +1103,29 @@ export const App = (() => {
     updateDebugPanel();
   }
   function updateDebugPanel() {
+    if (typeof document === 'undefined') return;
     const ta = document.getElementById('tutorial-debug-textarea');
     if (!ta) return;
-    const logs = window.__tutorialLogs || [];
+    const logs = (typeof window !== 'undefined' && window.__tutorialLogs) || [];
     ta.value = JSON.stringify(logs, null, 2);
     ta.scrollTop = ta.scrollHeight;
   }
   function dbg(tag, data) {
     const entry = { t: new Date().toISOString(), tag, data };
-    window.__tutorialLogs = window.__tutorialLogs || [];
-    window.__tutorialLogs.push(entry);
+    if (typeof window !== 'undefined') {
+      window.__tutorialLogs = window.__tutorialLogs || [];
+      window.__tutorialLogs.push(entry);
+    }
     // ALWAYS log to console for debugging
     try { console.log('[TUTORIAL]', tag, data); } catch {}
     if (isDebug()) {
       updateDebugPanel();
     }
   }
-  window.enableTutorialDebug = () => { localStorage.setItem(DBG_KEY,'1'); location.reload(); };
-  window.disableTutorialDebug = () => { localStorage.removeItem(DBG_KEY); location.reload(); };
+  if (typeof window !== 'undefined') {
+    window.enableTutorialDebug = () => { localStorage.setItem(DBG_KEY,'1'); location.reload(); };
+    window.disableTutorialDebug = () => { localStorage.removeItem(DBG_KEY); location.reload(); };
+  }
 
   // Debug: overlay state helper and observer
   function overlayState() {
@@ -1067,6 +1258,17 @@ export const App = (() => {
     hideOverlay();
   }
 
+  // ---------- Main Render Function ----------
+  function renderAll() {
+    renderSetup();
+    renderResults();
+    renderHistory();
+    setupSettings();
+    if (isDebug()) {
+      ensureDebugPanel();
+    }
+  }
+
   return {
     async start(deps) {
       Algorithms = deps.Algorithms; Storage = deps.Storage; Charts = deps.Charts;
@@ -1075,10 +1277,26 @@ export const App = (() => {
       setupTabs();
       setupEvidenceSwitcher();
       bindGlobalHandlers();
+      
+      // Ensure DOM is ready before rendering
+      if (document.readyState === 'loading') {
+        await new Promise(resolve => {
+          document.addEventListener('DOMContentLoaded', resolve, { once: true });
+        });
+      }
+      
       renderAll();
+      
+      // Force a second render after a short delay to ensure everything is visible
+      setTimeout(() => {
+        console.log('[APP] Performing secondary render to ensure visibility');
+        renderSetup();
+      }, 100);
+      
       toast('Ready. Create or open a project to begin.');
-    }
+    },
+    renderAll: renderAll,
+    getProject: () => project,
+    renderSetup: renderSetup
   };
-  
-  return { start };
 })();

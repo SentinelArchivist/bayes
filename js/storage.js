@@ -39,6 +39,14 @@ function defaultProject(name = 'My Project') {
     { id: uuid(), label: 'H2', prior: 0.5, color: DEFAULT_COLORS[1] },
   ];
   const priors = normalize(hypotheses.map(h => h.prior));
+  
+  // Ensure priors are written back to hypotheses
+  hypotheses.forEach((h, i) => {
+    h.prior = priors[i];
+  });
+  
+  console.log('Creating default project with hypotheses:', hypotheses);
+  
   return {
     id, name, createdAt: now, updatedAt: now,
     settings: { numberFormat: 'percent', round: 2, theme: 'light' },
