@@ -215,11 +215,21 @@
             debug.innerHTML = html;
         }
 
+        // Simple HTML escape helper to prevent XSS
+        function escapeHTML(str) {
+            return String(str)
+                .replace(/&/g, '&amp;')
+                .replace(/</g, '&lt;')
+                .replace(/>/g, '&gt;')
+                .replace(/"/g, '&quot;')
+                .replace(/'/g, '&#39;');
+        }
+
         async function runComprehensiveTest() {
             document.getElementById('test-info').innerHTML = `
                 <div>Timestamp: ${new Date().toISOString()}</div>
                 <div>User Agent: ${navigator.userAgent}</div>
-                <div>URL: ${window.location.href}</div>
+                <div>URL: ${escapeHTML(window.location.href)}</div>
             `;
 
             // Wait for app initialization
