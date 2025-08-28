@@ -160,7 +160,7 @@
                         html += `<div>Row ${i}: ID="${escapeHtml(hypothesisId)}", Inputs=${rowInputs.length}, Buttons=${rowButtons.length}</div>`;
                         
                         if (rowInputs.length >= 2) {
-                            html += `<div>  - Label: "${rowInputs[0].value}", Prior: "${rowInputs[1].value}"</div>`;
+                            html += `<div>  - Label: "${escapeHtml(rowInputs[0].value)}", Prior: "${escapeHtml(rowInputs[1].value)}"</div>`;
                         }
                     });
                 }
