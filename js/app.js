@@ -2,6 +2,17 @@
 // Exports: App
 
 export const App = (() => {
+  // Escapes HTML special characters in a string
+  function escapeHtml(str) {
+    return String(str)
+      .replace(/&/g, '&amp;')
+      .replace(/</g, '&lt;')
+      .replace(/>/g, '&gt;')
+      .replace(/"/g, '&quot;')
+      .replace(/'/g, '&#39;')
+      .replace(/`/g, '&#96;');
+  }
+
   let Algorithms, Storage, Charts;
   let project = null;
   
@@ -385,7 +396,7 @@ export const App = (() => {
       });
       
       // header
-      const cols = catLabels.map(l => `<th>${l}</th>`).join('');
+      const cols = catLabels.map(l => `<th>${escapeHtml(l)}</th>`).join('');
       head.innerHTML = `<tr><th>Hypothesis</th>${cols}</tr>`;
       
       // rows - preserve existing values when rebuilding
@@ -401,9 +412,9 @@ export const App = (() => {
         const tr = document.createElement('tr');
         const cells = catLabels.map((catLabel, cIdx) => {
           const existingVal = existingValues[hIdx] && existingValues[hIdx][cIdx] ? existingValues[hIdx][cIdx] : '';
-          return `<td><input type="text" value="${existingVal}" aria-label="P(${catLabel}|${h.label})" placeholder="0.5"></td>`;
+          return `<td><input type="text" value="${escapeHtml(existingVal)}" aria-label="P(${escapeHtml(catLabel)}|${escapeHtml(h.label)})" placeholder="0.5"></td>`;
         }).join('');
-        tr.innerHTML = `<td>${h.label}</td>${cells}`;
+        tr.innerHTML = `<td>${escapeHtml(h.label)}</td>${cells}`;
         body.appendChild(tr);
       }
     }
