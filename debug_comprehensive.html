@@ -117,6 +117,16 @@
             analysis.innerHTML = html;
         }
 
+        // Escapes HTML special characters in a string to prevent XSS
+        function escapeHtml(str) {
+            return String(str)
+                .replace(/&/g, '&amp;')
+                .replace(/</g, '&lt;')
+                .replace(/>/g, '&gt;')
+                .replace(/"/g, '&quot;')
+                .replace(/'/g, '&#39;');
+        }
+
         function analyzeDOMStructure() {
             const analysis = document.getElementById('dom-analysis');
             const hypoRows = document.getElementById('hypo-rows');
@@ -147,7 +157,7 @@
                         const rowButtons = row.querySelectorAll('button');
                         const hypothesisId = row.getAttribute('data-hypothesis-id');
                         
-                        html += `<div>Row ${i}: ID="${hypothesisId}", Inputs=${rowInputs.length}, Buttons=${rowButtons.length}</div>`;
+                        html += `<div>Row ${i}: ID="${escapeHtml(hypothesisId)}", Inputs=${rowInputs.length}, Buttons=${rowButtons.length}</div>`;
                         
                         if (rowInputs.length >= 2) {
                             html += `<div>  - Label: "${rowInputs[0].value}", Prior: "${rowInputs[1].value}"</div>`;
