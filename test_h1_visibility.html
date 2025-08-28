@@ -122,12 +122,21 @@
             debugDiv.scrollTop = debugDiv.scrollHeight;
         }
 
+        function escapeHtml(string) {
+            return String(string)
+                .replace(/&/g, "&amp;")
+                .replace(/</g, "&lt;")
+                .replace(/>/g, "&gt;")
+                .replace(/"/g, "&quot;")
+                .replace(/'/g, "&#39;");
+        }
+
         function addTestResult(testName, passed, message) {
             testResults.push({ testName, passed, message });
             const resultsDiv = document.getElementById('test-results');
             const resultDiv = document.createElement('div');
             resultDiv.className = `test-result ${passed ? 'pass' : 'fail'}`;
-            resultDiv.innerHTML = `<strong>${testName}:</strong> ${passed ? 'PASS' : 'FAIL'} - ${message}`;
+            resultDiv.innerHTML = `<strong>${escapeHtml(testName)}:</strong> ${passed ? 'PASS' : 'FAIL'} - ${escapeHtml(message)}`;
             resultsDiv.appendChild(resultDiv);
         }
 
