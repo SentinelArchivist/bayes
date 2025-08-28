@@ -1,18 +1,21 @@
 /* Service Worker for Bayes PWA */
 const CACHE_VER = 'v2';
 const APP_SHELL = [
-  '/',
-  '/index.html',
-  '/styles.css',
-  '/manifest.webmanifest',
-  '/js/main.js',
-  '/js/app.js',
-  '/js/algorithms.js',
-  '/js/storage.js',
-  '/js/charts.js',
-  '/offline.html',
-  '/icons/icon-192.svg',
-  '/icons/icon-512.svg'
+  './',
+  './index.html',
+  './styles.css',
+  './manifest.webmanifest',
+  './js/main.js',
+  './js/app.js',
+  './js/algorithms.js',
+  './js/storage.js',
+  './js/charts.js',
+  './offline.html',
+  './icons/icon-192.png',
+  './icons/icon-512.png',
+  './icons/icon-180.png',
+  './icons/icon-152.png',
+  './icons/icon-120.png'
 ];
 
 self.addEventListener('install', (event) => {
