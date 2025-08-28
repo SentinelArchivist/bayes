@@ -331,6 +331,16 @@ export const App = (() => {
 
   // ---------- Evidence: Jeffrey ----------
   function renderEvidenceJeffrey() {
+    // Escapes &, <, >, ", ', /
+    function escapeHTML(str) {
+      return String(str)
+        .replace(/&/g, "&amp;")
+        .replace(/</g, "&lt;")
+        .replace(/>/g, "&gt;")
+        .replace(/"/g, "&quot;")
+        .replace(/'/g, "&#39;")
+        .replace(/\//g, "&#x2F;");
+    }
     const catsBody = document.getElementById('jeffrey-cats');
     const head = document.getElementById('jeffrey-like-head');
     const body = document.getElementById('jeffrey-like-body');
@@ -385,7 +395,7 @@ export const App = (() => {
       });
       
       // header
-      const cols = catLabels.map(l => `<th>${l}</th>`).join('');
+      const cols = catLabels.map(l => `<th>${escapeHTML(l)}</th>`).join('');
       head.innerHTML = `<tr><th>Hypothesis</th>${cols}</tr>`;
       
       // rows - preserve existing values when rebuilding
@@ -401,9 +411,9 @@ export const App = (() => {
         const tr = document.createElement('tr');
         const cells = catLabels.map((catLabel, cIdx) => {
           const existingVal = existingValues[hIdx] && existingValues[hIdx][cIdx] ? existingValues[hIdx][cIdx] : '';
-          return `<td><input type="text" value="${existingVal}" aria-label="P(${catLabel}|${h.label})" placeholder="0.5"></td>`;
+          return `<td><input type="text" value="${existingVal}" aria-label="P(${escapeHTML(catLabel)}|${escapeHTML(h.label)})" placeholder="0.5"></td>`;
         }).join('');
-        tr.innerHTML = `<td>${h.label}</td>${cells}`;
+        tr.innerHTML = `<td>${escapeHTML(h.label)}</td>${cells}`;
         body.appendChild(tr);
       }
     }
